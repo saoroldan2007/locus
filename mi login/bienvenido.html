@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Locus - Panel Principal</title>
+    <style>
+        :root {
+            --primary-color: #a8845c;
+            --primary-hover: #92704c;
+            --bg-color: #f4f6f9;
+            --card-bg: #ffffff;
+            --text-main: #1a1a1a;
+            --text-muted: #666666;
+            --border-color: #e1e4e8;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .dashboard-container {
+            background: var(--card-bg);
+            padding: 36px 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            max-width: 460px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 15px;
+        }
+
+        .user-header-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-align: left;
+        }
+
+        .avatar-badge {
+            font-size: 32px;
+            background: #f0f2f5;
+            padding: 6px;
+            border-radius: 50%;
+            line-height: 1;
+        }
+
+        .user-info h2 {
+            margin: 0;
+            color: var(--text-main);
+            font-size: 18px;
+        }
+
+        .user-email {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Botón Abrir Perfil */
+        .btn-profile-open {
+            background: rgba(168, 132, 92, 0.1) !important;
+            color: var(--primary-color) !important;
+            border: 1px solid var(--primary-color) !important;
+            padding: 8px 14px !important;
+            border-radius: 20px !important;
+            font-size: 13px !important;
+            font-weight: 600 !important;
+            cursor: pointer !important;
+            transition: all 0.2s !important;
+            width: auto !important;
+            display: inline-block !important;
+        }
+
+        .btn-profile-open:hover {
+            background: var(--primary-color) !important;
+            color: white !important;
+        }
+
+        /* Estadísticas de Lealtad */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: #fafbfc;
+            border: 1px solid var(--border-color);
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-top: 4px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        button {
+            width: 100%;
+            padding: 11px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+            margin-top: 5px;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-logout {
+            background-color: #d9534f;
+            color: white;
+            margin-top: 15px;
+        }
+
+        .btn-logout:hover {
+            background-color: #c9302c;
+        }
+
+        #statusMsg {
+            font-size: 13px;
+            text-align: center;
+            margin-bottom: 15px;
+            font-weight: 500;
+            min-height: 18px;
+        }
+
+        /* Ventana Modal de Perfil */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+            z-index: 999;
+        }
+
+        .modal-overlay.active {
+            display: flex !important;
+        }
+
+        .modal-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            width: 100%;
+            max-width: 480px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+            text-align: left;
+            position: relative;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--text-main);
+        }
+
+        .close-btn {
+            background: none !important;
+            border: none !important;
+            font-size: 22px !important;
+            cursor: pointer !important;
+            color: var(--text-muted) !important;
+            width: auto !important;
+            padding: 0 8px !important;
+        }
+
+        .section-box {
+            background: #fafbfc;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 16px;
+        }
+
+        .section-box h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: var(--text-main);
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 13px;
+            background: white;
+            font-family: inherit;
+        }
+
+        input[type="text"]:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(168, 132, 92, 0.15);
+        }
+
+        textarea {
+            resize: none;
+            height: 55px;
+        }
+
+        .avatar-selector {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 12px;
+        }
+
+        .avatar-option {
+            font-size: 26px;
+            padding: 6px 10px !important;
+            border: 2px solid var(--border-color) !important;
+            border-radius: 10px !important;
+            background: white !important;
+            cursor: pointer !important;
+            transition: all 0.2s !important;
+            width: auto !important;
+        }
+
+        .avatar-option.selected {
+            border-color: var(--primary-color) !important;
+            background: rgba(168, 132, 92, 0.1) !important;
+        }
+
+        .skins-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .skin-btn {
+            padding: 8px !important;
+            border: 2px solid var(--border-color) !important;
+            background: white !important;
+            border-radius: 8px !important;
+            cursor: pointer !important;
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            transition: all 0.2s !important;
+            width: 100% !important;
+            color: var(--text-main);
+        }
+
+        .skin-btn.active {
+            border-color: var(--primary-color) !important;
+            background: rgba(168, 132, 92, 0.1) !important;
+            color: var(--primary-color) !important;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Panel Principal Limpio -->
+<div class="dashboard-container">
+    <div class="header-top">
+        <div class="user-header-info">
+            <span id="currentAvatarDisplay" class="avatar-badge">🧙‍♂️</span>
+            <div class="user-info">
+                <h2 id="currentUsernameDisplay">Usuario Locus</h2>
+                <span id="userEmailDisplay" class="user-email">Cargando...</span>
+            </div>
+        </div>
+        <button type="button" id="btnOpenProfile" class="btn-profile-open">⚙️ Perfil</button>
+    </div>
+
+    <!-- Mensajes de estado / racha -->
+    <div id="statusMsg"></div>
+
+    <!-- Estadísticas de Lealtad -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">🔥 Racha</div>
+            <div id="streakDisplay" class="stat-value">0 días</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">🪙 Monedas</div>
+            <div id="coinsDisplay" class="stat-value">0</div>
+        </div>
+    </div>
+
+    <!-- Botón para cerrar sesión -->
+    <button type="button" id="btnLogout" class="btn-logout">Cerrar sesión</button>
+</div>
+
+<!-- Ventana Modal de Perfil y Configuración -->
+<div id="profileModal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3>⚙️ Configuración de Perfil</h3>
+            <button type="button" id="btnCloseProfile" class="close-btn">✖</button>
+        </div>
+
+        <div id="modalStatusMsg" style="font-size: 12px; text-align: center; margin-bottom: 10px;"></div>
+
+        <!-- Personaje y Datos -->
+        <div class="section-box">
+            <h4>👤 Tu Personaje y Datos</h4>
+            
+            <label>Avatar / Muñeco:</label>
+            <div class="avatar-selector">
+                <button type="button" class="avatar-option" data-avatar="🧙‍♂️">🧙‍♂️</button>
+                <button type="button" class="avatar-option" data-avatar="🥷">🥷</button>
+                <button type="button" class="avatar-option" data-avatar="🤖">🤖</button>
+                <button type="button" class="avatar-option" data-avatar="🦊">🦊</button>
+            </div>
+
+            <div class="form-group">
+                <label for="usernameInput">Nombre de usuario (Apodo)</label>
+                <input type="text" id="usernameInput" placeholder="Ej. LocusMaster">
+            </div>
+
+            <div class="form-group">
+                <label for="bioInput">Datos personales / Biografía</label>
+                <textarea id="bioInput" placeholder="Cuéntanos algo sobre ti..."></textarea>
+            </div>
+
+            <button type="button" id="btnSaveProfile" class="btn-primary">Guardar Datos de Perfil</button>
+        </div>
+
+        <!-- Tienda de Skins -->
+        <div class="section-box">
+            <h4>✨ Tienda de Estilos (Skins)</h4>
+            <div class="skins-grid">
+                <button type="button" class="skin-btn active" data-skin="default" data-cost="0">Clásico</button>
+                <button type="button" class="skin-btn" data-skin="emerald" data-cost="50">Esmeralda (50🪙)</button>
+                <button type="button" class="skin-btn" data-skin="midnight" data-cost="100">Medianoche (100🪙)</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import { getFirestore, doc, setDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyC-eG_RswHd_G5c7cWxSFFyOjkbaCjhy0I",
+    authDomain: "locu-53697.firebaseapp.com",
+    projectId: "locu-53697",
+    storageBucket: "locu-53697.firebasestorage.app",
+    messagingSenderId: "487641257054",
+    appId: "1:487641257054:web:0c30c6b509bfaeb7abd0cf",
+    measurementId: "G-972QZNL1BF"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // Elementos Dashboard
+  const userEmailDisplay = document.getElementById('userEmailDisplay');
+  const currentUsernameDisplay = document.getElementById('currentUsernameDisplay');
+  const currentAvatarDisplay = document.getElementById('currentAvatarDisplay');
+  const streakDisplay = document.getElementById('streakDisplay');
+  const coinsDisplay = document.getElementById('coinsDisplay');
+  const statusMsg = document.getElementById('statusMsg');
+  const btnLogout = document.getElementById('btnLogout');
+
+  // Elementos Modal Perfil
+  const profileModal = document.getElementById('profileModal');
+  const btnOpenProfile = document.getElementById('btnOpenProfile');
+  const btnCloseProfile = document.getElementById('btnCloseProfile');
+  const modalStatusMsg = document.getElementById('modalStatusMsg');
+  
+  const usernameInput = document.getElementById('usernameInput');
+  const bioInput = document.getElementById('bioInput');
+  const btnSaveProfile = document.getElementById('btnSaveProfile');
+  const avatarButtons = document.querySelectorAll('.avatar-option');
+  const skinButtons = document.querySelectorAll('.skin-btn');
+
+  let currentUserUid = null;
+  let selectedAvatar = '🧙‍♂️';
+
+  // Abrir y cerrar modal de forma directa
+  btnOpenProfile.onclick = function() {
+      profileModal.classList.add('active');
+  };
+
+  btnCloseProfile.onclick = function() {
+      profileModal.classList.remove('active');
+  };
+
+  // Cerrar modal al hacer clic fuera de la tarjeta
+  profileModal.onclick = function(e) {
+      if (e.target === profileModal) {
+          profileModal.classList.remove('active');
+      }
+  };
+
+  // Aplicar temas visuales según la skin
+  function applyTheme(skinName) {
+      const root = document.documentElement;
+      if (skinName === 'emerald') {
+          root.style.setProperty('--primary-color', '#2e7d32');
+          root.style.setProperty('--primary-hover', '#1b5e20');
+      } else if (skinName === 'midnight') {
+          root.style.setProperty('--primary-color', '#3f51b5');
+          root.style.setProperty('--primary-hover', '#303f9f');
+      } else {
+          root.style.setProperty('--primary-color', '#a8845c');
+          root.style.setProperty('--primary-hover', '#92704c');
+      }
+
+      skinButtons.forEach(btn => {
+          if (btn.getAttribute('data-skin') === skinName) {
+              btn.classList.add('active');
+          } else {
+              btn.classList.remove('active');
+          }
+      });
+  }
+
+  // Selección visual de avatar en el modal
+  avatarButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+          avatarButtons.forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          selectedAvatar = btn.getAttribute('data-avatar');
+      });
+  });
+
+  // Verificar sesión y cargar datos de Firestore
+  onAuthStateChanged(auth, async (user) => {
+      if (user) {
+          currentUserUid = user.uid;
+          userEmailDisplay.textContent = user.email;
+
+          try {
+              const docRef = doc(db, "usuarios", currentUserUid);
+              const docSnap = await getDoc(docRef);
+
+              const todayStr = new Date().toISOString().split('T')[0];
+              let streak = 1;
+              let coins = 100;
+              let activeSkin = 'default';
+              let username = '';
+              let bio = '';
+
+              if (docSnap.exists()) {
+                  const data = docSnap.data();
+                  streak = data.streak || 1;
+                  coins = data.coins !== undefined ? data.coins : 100;
+                  activeSkin = data.activeSkin || 'default';
+                  username = data.username || 'Usuario Locus';
+                  bio = data.bio || '';
+                  selectedAvatar = data.avatar || '🧙‍♂️';
+
+                  avatarButtons.forEach(btn => {
+                      if (btn.getAttribute('data-avatar') === selectedAvatar) {
+                          btn.classList.add('selected');
+                      }
+                  });
+
+                  usernameInput.value = data.username || '';
+                  bioInput.value = bio;
+
+                  const lastLoginDate = data.lastLoginDate || '';
+
+                  if (lastLoginDate !== todayStr) {
+                      const yesterday = new Date();
+                      yesterday.setDate(yesterday.getDate() - 1);
+                      const yyyyMmDd = yesterday.toISOString().split('T')[0];
+
+                      if (lastLoginDate === yyyyMmDd) {
+                          streak += 1;
+                          coins += 20;
+                          statusMsg.style.color = '#137333';
+                          statusMsg.textContent = `🔥 ¡Racha de ${streak} días! +20 monedas ganadas.`;
+                      } else if (lastLoginDate < yyyyMmDd) {
+                          streak = 1;
+                          statusMsg.style.color = '#c5221f';
+                          statusMsg.textContent = `⚠️ Tu racha se reinició por inactividad.`;
+                      }
+
+                      await updateDoc(docRef, {
+                          streak: streak,
+                          coins: coins,
+                          lastLoginDate: todayStr
+                      });
+                  }
+              } else {
+                  await setDoc(docRef, {
+                      email: user.email,
+                      streak: 1,
+                      coins: 100,
+                      activeSkin: 'default',
+                      unlockedSkins: ['default'],
+                      lastLoginDate: todayStr,
+                      username: 'Usuario Locus',
+                      bio: '',
+                      avatar: '🧙‍♂️'
+                  });
+                  username = 'Usuario Locus';
+              }
+
+              // Renderizar dashboard
+              currentUsernameDisplay.textContent = username || 'Usuario Locus';
+              currentAvatarDisplay.textContent = selectedAvatar;
+              streakDisplay.textContent = `${streak} días`;
+              coinsDisplay.textContent = coins;
+              applyTheme(activeSkin);
+
+          } catch (error) {
+              console.error("Error al cargar perfil:", error);
+          }
+
+      } else {
+          window.location.href = "index.html";
+      }
+  });
+
+  // Guardar perfil (Nombre, bio y avatar)
+  btnSaveProfile.addEventListener('click', async () => {
+      if (!currentUserUid) return;
+
+      modalStatusMsg.style.color = '#1a73e8';
+      modalStatusMsg.textContent = 'Guardando perfil...';
+
+      try {
+          const docRef = doc(db, "usuarios", currentUserUid);
+          const newUsername = usernameInput.value.trim() || 'Usuario Locus';
+
+          await updateDoc(docRef, {
+              username: newUsername,
+              bio: bioInput.value.trim(),
+              avatar: selectedAvatar
+          });
+
+          currentUsernameDisplay.textContent = newUsername;
+          currentAvatarDisplay.textContent = selectedAvatar;
+
+          modalStatusMsg.style.color = '#137333';
+          modalStatusMsg.textContent = '¡Perfil actualizado con éxito!';
+          setTimeout(() => { modalStatusMsg.textContent = ''; }, 3000);
+
+      } catch (error) {
+          modalStatusMsg.style.color = '#c5221f';
+          modalStatusMsg.textContent = 'Error al guardar: ' + error.message;
+      }
+  });
+
+  // Lógica de tienda de Skins
+  skinButtons.forEach(btn => {
+      btn.addEventListener('click', async () => {
+          if (!currentUserUid) return;
+
+          const skinName = btn.getAttribute('data-skin');
+          const cost = parseInt(btn.getAttribute('data-cost'));
+          const docRef = doc(db, "usuarios", currentUserUid);
+          const docSnap = await getDoc(docRef);
+
+          if (!docSnap.exists()) return;
+          const data = docSnap.data();
+          const currentCoins = data.coins || 0;
+          const unlocked = data.unlockedSkins || ['default'];
+
+          if (unlocked.includes(skinName)) {
+              await updateDoc(docRef, { activeSkin: skinName });
+              applyTheme(skinName);
+              modalStatusMsg.style.color = '#1a73e8';
+              modalStatusMsg.textContent = `Estilo cambiado a ${skinName}.`;
+          } else {
+              if (currentCoins >= cost) {
+                  const newCoins = currentCoins - cost;
+                  unlocked.push(skinName);
+
+                  await updateDoc(docRef, {
+                      coins: newCoins,
+                      unlockedSkins: unlocked,
+                      activeSkin: skinName
+                  });
+
+                  coinsDisplay.textContent = newCoins;
+                  applyTheme(skinName);
+                  modalStatusMsg.style.color = '#137333';
+                  modalStatusMsg.textContent = `🎉 ¡Skin ${skinName} comprada con éxito!`;
+              } else {
+                  modalStatusMsg.style.color = '#c5221f';
+                  modalStatusMsg.textContent = `❌ Insuficientes monedas (${currentCoins}/${cost}).`;
+              }
+          }
+      });
+  });
+
+  // Cerrar sesión
+  btnLogout.addEventListener('click', async () => {
+      try {
+          await signOut(auth);
+          window.location.href = "index.html";
+      } catch (error) {
+          alert('Error al cerrar sesión: ' + error.message);
+      }
+  });
+</script>
+
+</body>
+</html>

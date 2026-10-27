@@ -1,0 +1,1793 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Locus - Panel Principal</title>
+    
+    <link rel="manifest" href="./manifest.json">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.2/color-thief.umd.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Librería Three.js para el Avatar 3D Avanzado -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <!-- SDKs de Firebase y Lógica Global -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyC-eG_RswHd_G5c7cWxSFFyOjkbaCjhy0I",
+            authDomain: "locu-53697.firebaseapp.com",
+            projectId: "locu-53697",
+            storageBucket: "locu-53697.firebasestorage.app",
+            messagingSenderId: "487641257054",
+            appId: "1:487641257054:web:0c30c6b509bfaeb7abd0cf",
+            measurementId: "G-972QZNL1BF"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.firebaseAuth = auth;
+        window.db = db;
+        let esModoRegistro = false;
+
+        window.adaptarTemaDesdeLogo = function() {
+            const img = document.getElementById('logo-imagen-principal');
+            if (!img) return;
+            if (img.complete) {
+                extraerYAplicarColor(img);
+            } else {
+                img.onload = () => extraerYAplicarColor(img);
+            }
+        };
+
+        function extraerYAplicarColor(imgElement) {
+            try {
+                const colorThief = new ColorThief();
+                const colorRGB = colorThief.getColor(imgElement);
+                if (colorRGB) {
+                    const r = colorRGB[0], g = colorRGB[1], b = colorRGB[2];
+                    const colorHex = `rgb(${r}, ${g}, ${b})`;
+                    const colorHover = `rgb(${Math.min(r+40, 255)}, ${Math.min(g+40, 255)}, ${Math.min(b+40, 255)})`;
+                    document.documentElement.style.setProperty('--accent-gold', colorHex);
+                    document.documentElement.style.setProperty('--accent-gold-hover', colorHover);
+                }
+            } catch (e) {
+                console.log("Color Thief ejecutándose localmente.");
+            }
+        }
+
+        window.cambiarVista = function(nombreVista) {
+            const secciones = document.querySelectorAll('.view-section');
+            secciones.forEach(seccion => seccion.classList.remove('active-view'));
+            const seccionActiva = document.getElementById(`vista-${nombreVista}`);
+            if (seccionActiva) seccionActiva.classList.add('active-view');
+            
+            document.querySelectorAll('.bottom-nav-mobile button').forEach(btn => btn.classList.remove('active'));
+            const botonMovilActivo = document.getElementById(`nav-mobile-${nombreVista}`);
+            if (botonMovilActivo) {
+                botonMovilActivo.classList.add('active');
+            }
+
+            if (nombreVista === 'configuracion') {
+                window.cargarDatosConfiguracion();
+            }
+
+            if (nombreVista === 'dashboard-usuario') {
+                setTimeout(() => { window.inicializarAvatarMillonario3D('novato'); }, 150);
+            }
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        // --- FILTRAR NEGOCIOS POR CATEGORÍA ---
+        window.filtrarNegocios = function(categoria, btnElement) {
+            document.querySelectorAll('.btn-categoria-filtro').forEach(btn => {
+                btn.style.background = 'rgba(28, 35, 43, 0.6)';
+                btn.style.borderColor = 'var(--border-color)';
+                btn.style.color = '#94a3b8';
+            });
+            if(btnElement) {
+                btnElement.style.background = 'var(--accent-gold)';
+                btnElement.style.borderColor = 'var(--accent-gold)';
+                btnElement.style.color = '#07090d';
+            }
+
+            const tarjetas = document.querySelectorAll('.empresa-card');
+            tarjetas.forEach(tarjeta => {
+                const catCard = tarjeta.getAttribute('data-categoria');
+                if (categoria === 'todos' || catCard === categoria) {
+                    tarjeta.style.display = 'flex';
+                } else {
+                    tarjeta.style.display = 'none';
+                }
+            });
+        };
+
+        window.seleccionarMinijuego = function(idJuego) {
+            document.getElementById('selector-menu-juegos').style.display = 'none';
+            document.querySelectorAll('.contenedor-juego-activo').forEach(el => el.style.display = 'none');
+            
+            const juegoSeleccionado = document.getElementById(`juego-${idJuego}`);
+            if (juegoSeleccionado) {
+                juegoSeleccionado.style.display = 'block';
+                if (idJuego === 'pelea') window.prepararMinijuegoPelea();
+                if (idJuego === 'hamburguesa') window.prepararMinijuegoHamburguesa();
+            }
+        };
+
+        window.volverAlMenuMinijuegos = function() {
+            if (peleaInterval) clearInterval(peleaInterval);
+            if (burgerInterval) clearInterval(burgerInterval);
+            peleaActiva = false;
+            burgerActivo = false;
+
+            document.querySelectorAll('.contenedor-juego-activo').forEach(el => el.style.display = 'none');
+            document.getElementById('selector-menu-juegos').style.display = 'grid';
+        };
+
+        window.alternarModoAuth = function() {
+            esModoRegistro = !esModoRegistro;
+            const titulo = document.getElementById('auth-title');
+            const boton = document.getElementById('auth-submit-btn');
+            const textoSwitch = document.getElementById('auth-switch-action');
+            const camposRegistro = document.getElementById('campos-registro');
+
+            document.getElementById('email').value = '';
+            document.getElementById('password').value = '';
+
+            if (esModoRegistro) {
+                titulo.innerText = "Crear Cuenta de Usuario";
+                boton.innerText = "Registrarse";
+                textoSwitch.innerText = "Inicia sesión aquí";
+                camposRegistro.style.display = "block";
+            } else {
+                titulo.innerText = "Iniciar Sesión de Usuario";
+                boton.innerText = "Entrar a Locus";
+                textoSwitch.innerText = "Regístrate aquí";
+                camposRegistro.style.display = "none";
+            }
+        };
+
+        window.manejarAutenticacion = async function(event) {
+            event.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                if (esModoRegistro) {
+                    const edad = parseInt(document.getElementById('edad').value);
+                    if (edad < 18) {
+                        alert("Debes ser mayor de 18 años.");
+                        return;
+                    }
+                    const nombre = document.getElementById('nombre').value;
+                    const apellido = document.getElementById('apellido').value;
+
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                    await setDoc(doc(db, "Usuarios", userCredential.user.uid), {
+                        nombre, apellido, edad, email, puntos: 100, tickets: 3, racha: 1, ahorroTotal: 0, misionCompleta: false, nivel: "Nivel 1"
+                    });
+                    alert("¡Cuenta creada con éxito!");
+                } else {
+                    await signInWithEmailAndPassword(auth, email, password);
+                    alert("¡Bienvenido de nuevo!");
+                }
+                window.cambiarVista('inicio');
+            } catch (error) {
+                alert("Error: " + error.message);
+            }
+        };
+
+        window.actualizarNivelYBarra = function(ticketsTotales) {
+            const ticketsPorNivel = 3;
+            const nivelActual = Math.floor(ticketsTotales / ticketsPorNivel) + 1;
+            const ticketsEnNivel = ticketsTotales % ticketsPorNivel;
+            const porcentaje = (ticketsEnNivel / ticketsPorNivel) * 100;
+
+            document.getElementById('info-nivel').innerText = `Nivel ${nivelActual}`;
+            document.getElementById('texto-nivel-actual').innerText = `Nivel ${nivelActual}`;
+            document.getElementById('texto-siguiente-nivel').innerText = `Nivel ${nivelActual + 1}`;
+
+            const barra = document.getElementById('barra-progreso-nivel');
+            if (barra) barra.style.width = `${porcentaje}%`;
+        };
+
+        // --- SISTEMA DE LOGROS EN MISIONES ---
+        window.toggleModalLogros = function() {
+            const modal = document.getElementById('modal-logros');
+            if(modal) {
+                modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+            }
+        };
+
+        // --- JUEGO 1: STICKFIGHTER RAGDOLL PRO ---
+        let peleaInterval, ctxPalea, fighter1, fighter2, armasSuelo = [], balasCombate = [], peleaActiva = false;
+        let keysPelea = {};
+        let listenersAgregados = false;
+
+        window.prepararMinijuegoPelea = function() {
+            const canvas = document.getElementById('canvas-pelea');
+            if (!canvas) return;
+            ctxPalea = canvas.getContext('2d');
+
+            fighter1 = crearRagdollFighter(90, 160, '#f39c12', 1);
+            fighter2 = crearRagdollFighter(270, 160, '#e50914', -1);
+            balasCombate = [];
+            armasSuelo = [
+                { x: 130, y: 195, tipo: 'katana' },
+                { x: 230, y: 195, tipo: 'pistola' }
+            ];
+
+            if (!listenersAgregados) {
+                window.addEventListener('keydown', (e) => {
+                    keysPelea[e.key.toLowerCase()] = true;
+                    if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase())) {
+                        if (peleaActiva) e.preventDefault();
+                    }
+                });
+                window.addEventListener('keyup', (e) => {
+                    keysPelea[e.key.toLowerCase()] = false;
+                });
+                listenersAgregados = true;
+            }
+        };
+
+        function crearRagdollFighter(x, y, color, mirando) {
+            return {
+                x: x, y: y, vx: 0, vy: 0, vida: 100, color: color,
+                arma: 'ninguna', municion: 0, mirando: mirando, saltando: false,
+                cabeza: { x: x, y: y - 45, vx: 0, vy: 0 },
+                torso: { x: x, y: y - 25, vx: 0, vy: 0 },
+                pelvis: { x: x, y: y - 10, vx: 0, vy: 0 },
+                pieIzquierdo: { x: x - 10, y: y, vx: 0, vy: 0 },
+                pieDerecho: { x: x + 10, y: y, vx: 0, vy: 0 },
+                manoIzquierda: { x: x - 15, y: y - 20, vx: 0, vy: 0 },
+                manoDerecha: { x: x + 15, y: y - 20, vx: 0, vy: 0 },
+                accionando: false, stagger: 0
+            };
+        }
+
+        window.iniciarMinijuegoPelea = function() {
+            document.getElementById('overlay-pelea').style.display = 'none';
+            fighter1.vida = 100; fighter2.vida = 100;
+            fighter1.x = 90; fighter2.x = 270;
+            fighter1.arma = 'ninguna'; fighter2.arma = 'ninguna';
+            document.getElementById('vida-p1').style.width = '100%';
+            document.getElementById('vida-p2').style.width = '100%';
+            peleaActiva = true;
+
+            if (peleaInterval) clearInterval(peleaInterval);
+            peleaInterval = setInterval(buclePelea, 1000 / 60);
+        };
+
+        function buclePelea() {
+            if (!peleaActiva) return;
+
+            fighter1.vx = 0;
+            if (keysPelea['a'] || keysPelea['arrowleft']) { fighter1.vx = -4.2; fighter1.mirando = -1; }
+            if (keysPelea['d'] || keysPelea['arrowright']) { fighter1.vx = 4.2; fighter1.mirando = 1; }
+            if ((keysPelea['w'] || keysPelea['arrowup']) && !fighter1.saltando) {
+                fighter1.vy = -11;
+                fighter1.cabeza.vy -= 4;
+                fighter1.saltando = true;
+            }
+            if (keysPelea['f'] || keysPelea[' '] || keysPelea['e']) {
+                if (!fighter1.accionando) {
+                    fighter1.accionando = true;
+                    setTimeout(() => fighter1.accionando = false, 180);
+
+                    if (fighter1.arma === 'pistola' && fighter1.municion > 0) {
+                        fighter1.municion--;
+                        balasCombate.push({ x: fighter1.torso.x + (fighter1.mirando * 22), y: fighter1.torso.y, vx: fighter1.mirando * 11, dueno: 'p1' });
+                    } else if (fighter1.arma === 'katana') {
+                        if (Math.abs(fighter1.torso.x - fighter2.torso.x) < 55) {
+                            fighter2.vida -= 18;
+                            fighter2.vx += fighter1.mirando * 8;
+                            fighter2.cabeza.vy -= 6;
+                            fighter2.stagger = 15;
+                            document.getElementById('vida-p2').style.width = Math.max(0, fighter2.vida) + '%';
+                        }
+                    } else {
+                        if (Math.abs(fighter1.torso.x - fighter2.torso.x) < 42) {
+                            fighter2.vida -= 6;
+                            fighter2.vx += fighter1.mirando * 4;
+                            fighter2.stagger = 10;
+                            document.getElementById('vida-p2').style.width = Math.max(0, fighter2.vida) + '%';
+                        }
+                    }
+                }
+            }
+
+            armasSuelo.forEach((arma, index) => {
+                if (Math.abs(fighter1.torso.x - arma.x) < 25 && fighter1.y >= 170) {
+                    fighter1.arma = arma.tipo;
+                    fighter1.municion = arma.tipo === 'pistola' ? 6 : 0;
+                    armasSuelo.splice(index, 1);
+                }
+                if (Math.abs(fighter2.torso.x - arma.x) < 25 && fighter2.y >= 170) {
+                    fighter2.arma = arma.tipo;
+                    fighter2.municion = arma.tipo === 'pistola' ? 6 : 0;
+                    armasSuelo.splice(index, 1);
+                }
+            });
+
+            actualizarRagdollFisico(fighter1);
+
+            fighter2.vx = 0;
+            if (fighter2.torso.x > fighter1.torso.x + 60) { fighter2.vx = -2.5; fighter2.mirando = -1; }
+            else if (fighter2.torso.x < fighter1.torso.x - 60) { fighter2.vx = 2.5; fighter2.mirando = 1; }
+            else {
+                if (Math.random() < 0.045 && !fighter2.accionando) {
+                    fighter2.accionando = true;
+                    setTimeout(() => fighter2.accionando = false, 180);
+                    if (fighter2.arma === 'pistola' && fighter2.municion > 0) {
+                        fighter2.municion--;
+                        balasCombate.push({ x: fighter2.torso.x + (fighter2.mirando * 22), y: fighter2.torso.y, vx: fighter2.mirando * 11, dueno: 'p2' });
+                    } else {
+                        fighter1.vida -= fighter2.arma === 'katana' ? 16 : 6;
+                        fighter1.vx += fighter2.mirando * 5;
+                        fighter1.cabeza.vy -= 5;
+                        fighter1.stagger = 12;
+                        document.getElementById('vida-p1').style.width = Math.max(0, fighter1.vida) + '%';
+                    }
+                }
+            }
+
+            actualizarRagdollFisico(fighter2);
+
+            balasCombate.forEach((bala, index) => {
+                bala.x += bala.vx;
+                if (bala.dueno === 'p1' && Math.abs(bala.x - fighter2.torso.x) < 20 && Math.abs(bala.y - fighter2.torso.y) < 30) {
+                    fighter2.vida -= 24;
+                    fighter2.vx += bala.vx > 0 ? 8 : -8;
+                    fighter2.cabeza.vy -= 7;
+                    fighter2.stagger = 18;
+                    document.getElementById('vida-p2').style.width = Math.max(0, fighter2.vida) + '%';
+                    balasCombate.splice(index, 1);
+                } else if (bala.dueno === 'p2' && Math.abs(bala.x - fighter1.torso.x) < 20 && Math.abs(bala.y - fighter1.torso.y) < 30) {
+                    fighter1.vida -= 24;
+                    fighter1.vx += bala.vx > 0 ? 8 : -8;
+                    fighter1.cabeza.vy -= 7;
+                    fighter1.stagger = 18;
+                    document.getElementById('vida-p1').style.width = Math.max(0, fighter1.vida) + '%';
+                    balasCombate.splice(index, 1);
+                } else if (bala.x < 0 || bala.x > 360) {
+                    balasCombate.splice(index, 1);
+                }
+            });
+
+            if (fighter1.vida <= 0) terminarPelea("💥 ¡K.O. Fatal! Rival victorioso.");
+            if (fighter2.vida <= 0) terminarPelea("🏆 ¡Victoria Absoluta! K.O. Técnico.");
+
+            ctxPalea.fillStyle = '#0b0f15';
+            ctxPalea.fillRect(0, 0, 360, 300);
+
+            ctxPalea.fillStyle = '#161d22';
+            ctxPalea.fillRect(0, 230, 360, 70);
+            ctxPalea.strokeStyle = '#2c3e50';
+            ctxPalea.lineWidth = 1;
+            for(let i=0; i<360; i+=24) {
+                ctxPalea.beginPath(); ctxPalea.moveTo(i, 230); ctxPalea.lineTo(i, 300); ctxPalea.stroke();
+            }
+
+            armasSuelo.forEach(arma => {
+                ctxPalea.fillStyle = arma.tipo === 'katana' ? '#3498db' : '#e67e22';
+                ctxPalea.fillRect(arma.x - 7, arma.y - 3, 14, 5);
+            });
+
+            ctxPalea.fillStyle = '#f1c40f';
+            balasCombate.forEach(bala => {
+                ctxPalea.fillRect(bala.x - 2, bala.y - 1, 4, 3);
+            });
+
+            dibujarFighterRagdollCompleto(ctxPalea, fighter1);
+            dibujarFighterRagdollCompleto(ctxPalea, fighter2);
+        }
+
+        function actualizarRagdollFisico(f) {
+            f.x += f.vx;
+            f.vy += 0.55;
+            f.y += f.vy;
+            if (f.y > 185) { f.y = 185; f.vy = 0; f.saltando = false; }
+            if (f.x < 25) f.x = 25; if (f.x > 335) f.x = 335;
+            if (f.stagger > 0) f.stagger--;
+
+            f.pelvis.x = f.x;
+            f.pelvis.y = f.y - 15;
+
+            f.torso.x += (f.x - f.torso.x) * 0.3 + (f.vx * 0.2);
+            f.torso.y += ((f.y - 35) - f.torso.y) * 0.3;
+
+            f.cabeza.vy += 0.4;
+            f.cabeza.x += (f.torso.x - f.cabeza.x) * 0.2 + (f.vx * 0.1);
+            f.cabeza.y += ((f.torso.y - 20) - f.cabeza.y) * 0.2 + f.cabeza.vy;
+            if (f.cabeza.y > f.torso.y - 10) { f.cabeza.y = f.torso.y - 10; f.cabeza.vy *= -0.3; }
+
+            let paso = Math.sin(f.x * 0.1) * 14 * (f.vx !== 0 ? 1 : 0);
+            f.pieIzquierdo.x += ((f.x - 12 + paso) - f.pieIzquierdo.x) * 0.4;
+            f.pieIzquierdo.y = f.y;
+            f.pieDerecho.x += ((f.x + 12 - paso) - f.pieDerecho.x) * 0.4;
+            f.pieDerecho.y = f.y;
+
+            let objetivoManoX = f.torso.x + (f.mirando * (f.accionando ? 32 : 16));
+            let objetivoManoY = f.torso.y + (f.accionando ? 2 : 10);
+            f.manoDerecha.x += (objetivoManoX - f.manoDerecha.x) * 0.35;
+            f.manoDerecha.y += (objetivoManoY - f.manoDerecha.y) * 0.35;
+
+            f.manoIzquierda.x += ((f.torso.x + (f.mirando * 8)) - f.manoIzquierda.x) * 0.35;
+            f.manoIzquierda.y += ((f.torso.y + 12) - f.manoIzquierda.y) * 0.35;
+        }
+
+        function dibujarFighterRagdollCompleto(ctx, f) {
+            ctx.save();
+            ctx.strokeStyle = f.color;
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            ctx.beginPath();
+            ctx.arc(f.cabeza.x, f.cabeza.y, 8, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(f.cabeza.x, f.cabeza.y + 8);
+            ctx.lineTo(f.torso.x, f.torso.y);
+            ctx.lineTo(f.pelvis.x, f.pelvis.y);
+            ctx.stroke();
+
+            let rodillaIzqX = (f.pelvis.x + f.pieIzquierdo.x) / 2 - 4;
+            let rodillaIzqY = (f.pelvis.y + f.pieIzquierdo.y) / 2;
+            let rodillaDerX = (f.pelvis.x + f.pieDerecho.x) / 2 + 4;
+            let rodillaDerY = (f.pelvis.y + f.pieDerecho.y) / 2;
+
+            ctx.beginPath();
+            ctx.moveTo(f.pelvis.x, f.pelvis.y);
+            ctx.lineTo(rodillaIzqX, rodillaIzqY);
+            ctx.lineTo(f.pieIzquierdo.x, f.pieIzquierdo.y);
+
+            ctx.moveTo(f.pelvis.x, f.pelvis.y);
+            ctx.lineTo(rodillaDerX, rodillaDerY);
+            ctx.lineTo(f.pieDerecho.x, f.pieDerecho.y);
+            ctx.stroke();
+
+            let codoX = (f.torso.x + f.manoDerecha.x) / 2;
+            let codoY = (f.torso.y + f.manoDerecha.y) / 2 - 4;
+
+            ctx.beginPath();
+            ctx.moveTo(f.torso.x, f.torso.y);
+            ctx.lineTo(codoX, codoY);
+            ctx.lineTo(f.manoDerecha.x, f.manoDerecha.y);
+
+            ctx.moveTo(f.torso.x, f.torso.y);
+            ctx.lineTo(f.manoIzquierda.x, f.manoIzquierda.y);
+            ctx.stroke();
+
+            if (f.arma === 'katana') {
+                ctx.strokeStyle = '#3498db';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(f.manoDerecha.x, f.manoDerecha.y);
+                ctx.lineTo(f.manoDerecha.x + (f.mirando * 26), f.manoDerecha.y - 8);
+                ctx.stroke();
+            } else if (f.arma === 'pistola') {
+                ctx.fillStyle = '#e67e22';
+                ctx.fillRect(f.manoDerecha.x - 2, f.manoDerecha.y - 2, 9, 5);
+            }
+
+            ctx.restore();
+        }
+
+        function terminarPelea(msg) {
+            peleaActiva = false;
+            clearInterval(peleaInterval);
+            document.getElementById('titulo-overlay-pelea').innerText = msg;
+            document.getElementById('overlay-pelea').style.display = 'flex';
+        }
+
+        // --- JUEGO 2: BURGER MASTER PHYSICS ---
+        let burgerInterval, ctxBurger, baseBurger, ingredientesTorre = [], ingredienteActual = null, salsasGotas = [], burgerActivo = false, scoreBurger = 0;
+        let burgerKeys = {};
+        let burgerListenersAgregados = false;
+        let tiposIngredientes = [
+            { nombre: 'Carne jugosa', color: '#8E4A23', h: 14, w: 70 },
+            { nombre: 'Queso fundido', color: '#F1C40F', h: 8, w: 76 },
+            { nombre: 'Lechuga crujiente', color: '#2ECC71', h: 10, w: 80 },
+            { nombre: 'Tomate fresco', color: '#E74C3C', h: 10, w: 68 },
+            { nombre: 'Pepinillos', color: '#1E8449', h: 8, w: 50 },
+            { nombre: 'Pan superior', color: '#D4AC0D', h: 22, w: 74 }
+        ];
+
+        window.prepararMinijuegoHamburguesa = function() {
+            const canvas = document.getElementById('canvas-hamburguesa');
+            if (!canvas) return;
+            ctxBurger = canvas.getContext('2d');
+
+            baseBurger = { x: 180, y: 260, w: 80, h: 16, vx: 0 };
+            ingredientesTorre = [];
+            salsasGotas = [];
+            scoreBurger = 0;
+
+            if (!burgerListenersAgregados) {
+                window.addEventListener('keydown', (e) => {
+                    burgerKeys[e.key.toLowerCase()] = true;
+                    if ((e.key === ' ' || e.key.toLowerCase() === 's') && burgerActivo) {
+                        e.preventDefault();
+                        lanzarChorroSalsa();
+                    }
+                });
+                window.addEventListener('keyup', (e) => {
+                    burgerKeys[e.key.toLowerCase()] = false;
+                });
+                burgerListenersAgregados = true;
+            }
+        };
+
+        window.iniciarMinijuegoHamburguesa = function() {
+            document.getElementById('overlay-hamburguesa').style.display = 'none';
+            scoreBurger = 0;
+            document.getElementById('score-burger').innerText = scoreBurger;
+            ingredientesTorre = [
+                { x: 180, y: 248, w: 80, h: 16, color: '#D4AC0D', tipo: 'Pan inferior', vx: 0, vy: 0, angulo: 0 }
+            ];
+            generarSiguienteIngrediente();
+            burgerActivo = true;
+
+            if (burgerInterval) clearInterval(burgerInterval);
+            burgerInterval = setInterval(bucleHamburguesa, 1000 / 60);
+        };
+
+        function generarSiguienteIngrediente() {
+            let plantilla = tiposIngredientes[Math.floor(Math.random() * tiposIngredientes.length)];
+            ingredienteActual = {
+                x: 60 + Math.random() * 240,
+                y: 10,
+                w: plantilla.w,
+                h: plantilla.h,
+                color: plantilla.color,
+                tipo: plantilla.nombre,
+                vx: (Math.random() - 0.5) * 2,
+                vy: 1.5,
+                angulo: 0,
+                vAngulo: (Math.random() - 0.5) * 0.05
+            };
+        }
+
+        function lanzarChorroSalsa() {
+            if (!burgerActivo) return;
+            let ult = ingredientesTorre[ingredientesTorre.length - 1];
+            let coloresSalsa = ['#FFFFFF', '#D98880', '#F39C12'];
+            let colorElegido = coloresSalsa[Math.floor(Math.random() * coloresSalsa.length)];
+            
+            for(let i=0; i<6; i++) {
+                salsasGotas.push({
+                    x: ult.x + (Math.random() - 0.5) * ult.w,
+                    y: ult.y - 5,
+                    vx: (Math.random() - 0.5) * 3,
+                    vy: 2 + Math.random() * 2,
+                    color: colorElegido,
+                    radius: 3 + Math.random() * 2
+                });
+            }
+        }
+
+        function bucleHamburguesa() {
+            if (!burgerActivo) return;
+
+            if (burgerKeys['arrowleft'] || burgerKeys['a']) {
+                baseBurger.x -= 5;
+            }
+            if (burgerKeys['arrowright'] || burgerKeys['d']) {
+                baseBurger.x += 5;
+            }
+            if (baseBurger.x < 50) baseBurger.x = 50;
+            if (baseBurger.x > 310) baseBurger.x = 310;
+
+            ingredientesTorre[0].x = baseBurger.x;
+
+            if (ingredienteActual) {
+                if (burgerKeys['arrowleft'] || burgerKeys['a']) ingredienteActual.vx -= 0.15;
+                if (burgerKeys['arrowright'] || burgerKeys['d']) ingredienteActual.vx += 0.15;
+
+                ingredienteActual.x += ingredienteActual.vx;
+                ingredienteActual.vy += 0.25;
+                ingredienteActual.y += ingredienteActual.vy;
+                ingredienteActual.angulo += ingredienteActual.vAngulo;
+
+                let topePila = ingredientesTorre[ingredientesTorre.length - 1];
+
+                if (ingredienteActual.y + ingredienteActual.h/2 >= topePila.y - topePila.h/2) {
+                    if (Math.abs(ingredienteActual.x - topePila.x) < 45) {
+                        ingredienteActual.y = topePila.y - topePila.h/2 - ingredienteActual.h/2;
+                        ingredienteActual.vx *= 0.3;
+                        ingredienteActual.vy = 0;
+                        ingredienteActual.vAngulo *= 0.2;
+
+                        ingredientesTorre.push(ingredienteActual);
+                        scoreBurger += 50;
+                        document.getElementById('score-burger').innerText = scoreBurger;
+
+                        if (ingredienteActual.tipo === 'Pan superior') {
+                            scoreBurger += 200;
+                            alert("🍔 ¡Hamburguesa gourmet perfecta completada con éxito!");
+                        }
+
+                        generarSiguienteIngrediente();
+                    } else if (ingredienteActual.y > 280) {
+                        terminarHamburguesa("💥 ¡Ingrediente caído! Estructura colapsada.");
+                    }
+                }
+            }
+
+            salsasGotas.forEach((s, idx) => {
+                s.x += s.vx;
+                s.y += s.vy;
+                s.vy += 0.3;
+                let topIng = ingredientesTorre[ingredientesTorre.length - 1];
+                if (s.y >= topIng.y - topIng.h/2 && Math.abs(s.x - topIng.x) < topIng.w/2) {
+                    s.vy = 0;
+                }
+                if (s.y > 295) salsasGotas.splice(idx, 1);
+            });
+
+            ctxBurger.fillStyle = '#111822';
+            ctxBurger.fillRect(0, 0, 360, 300);
+
+            ctxBurger.fillStyle = '#212F3D';
+            ctxBurger.fillRect(0, 275, 360, 25);
+            ctxBurger.strokeStyle = 'var(--accent-gold)';
+            ctxBurger.beginPath(); ctxBurger.moveTo(0, 275); ctxBurger.lineTo(360, 275); ctxBurger.stroke();
+
+            ingredientesTorre.forEach((ing) => {
+                ctxBurger.save();
+                ctxBurger.translate(ing.x, ing.y);
+                ctxBurger.rotate(ing.angulo);
+                ctxBurger.fillStyle = ing.color;
+                ctxBurger.beginPath();
+                ctxBurger.roundRect(-ing.w/2, -ing.h/2, ing.w, ing.h, 6);
+                ctxBurger.fill();
+                ctxBurger.strokeStyle = '#000000';
+                ctxBurger.lineWidth = 1;
+                ctxBurger.stroke();
+                ctxBurger.restore();
+            });
+
+            salsasGotas.forEach(s => {
+                ctxBurger.fillStyle = s.color;
+                ctxBurger.beginPath();
+                ctxBurger.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+                ctxBurger.fill();
+            });
+
+            if (ingredienteActual) {
+                ctxBurger.save();
+                ctxBurger.translate(ingredienteActual.x, ingredienteActual.y);
+                ctxBurger.rotate(ingredienteActual.angulo);
+                ctxBurger.fillStyle = ingredienteActual.color;
+                ctxBurger.beginPath();
+                ctxBurger.roundRect(-ingredienteActual.w/2, -ingredienteActual.h/2, ingredienteActual.w, ingredienteActual.h, 6);
+                ctxBurger.fill();
+                ctxBurger.strokeStyle = '#fff';
+                ctxBurger.lineWidth = 1;
+                ctxBurger.stroke();
+                ctxBurger.restore();
+            }
+        }
+
+        function terminarHamburguesa(msg) {
+            burgerActivo = false;
+            clearInterval(burgerInterval);
+            document.getElementById('titulo-overlay-hamburguesa').innerText = msg;
+            document.getElementById('overlay-hamburguesa').style.display = 'flex';
+        }
+
+        window.completarMisionDiaria = async function() {
+            const user = auth.currentUser;
+            if (!user) return;
+            const docRef = doc(db, "Usuarios", user.uid);
+            const docSnap = await getDoc(docRef);
+            if (!docSnap.exists()) return;
+            const datos = docSnap.data();
+            if (datos.misionCompleta) {
+                alert("Ya reclamaste tu misión de hoy.");
+                return;
+            }
+            const nuevosPuntos = (datos.puntos || 0) + 50;
+            await setDoc(docRef, { puntos: nuevosPuntos, misionCompleta: true }, { merge: true });
+            document.getElementById('user-points-display').innerText = nuevosPuntos.toLocaleString();
+            alert("¡Misión completada! +50 Puntos.");
+        };
+
+        window.canjearRecompensa = async function(costo, item) {
+            const user = auth.currentUser;
+            if (!user) {
+                window.cambiarVista('login');
+                return;
+            }
+            const docRef = doc(db, "Usuarios", user.uid);
+            const docSnap = await getDoc(docRef);
+            if (!docSnap.exists()) return;
+            const datos = docSnap.data();
+            if ((datos.puntos || 0) < costo) {
+                alert("No tienes suficientes puntos.");
+                return;
+            }
+            const nuevosPuntos = datos.puntos - costo;
+            await setDoc(docRef, { puntos: nuevosPuntos }, { merge: true });
+            document.getElementById('user-points-display').innerText = nuevosPuntos.toLocaleString();
+            alert(`¡Canje exitoso de ${item}!`);
+        };
+
+        window.manejarLoginEmpresas = async function(e) {
+            e.preventDefault();
+            const email = document.getElementById('empresa-email').value;
+            const pass = document.getElementById('empresa-pass').value;
+            try {
+                const res = await signInWithEmailAndPassword(auth, email, pass);
+                const empresaDoc = await getDoc(doc(db, "Empresas", res.user.email));
+                if (empresaDoc.exists()) {
+                    document.getElementById('modal-login-empresa').style.display = 'none';
+                    alert("¡Acceso autorizado al Panel Corporativo!");
+                } else {
+                    await signOut(auth);
+                    alert("Acceso denegado: No es una empresa aliada.");
+                }
+            } catch (err) {
+                alert("Error de acceso corporativo.");
+            }
+        };
+
+        window.cargarDatosConfiguracion = async function() {
+            const user = auth.currentUser;
+            if (!user) {
+                alert("Debes iniciar sesión primero.");
+                window.cambiarVista('login');
+                return;
+            }
+            try {
+                const docRef = doc(db, "Usuarios", user.uid);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const d = docSnap.data();
+                    document.getElementById('config-nombre').value = d.nombre || '';
+                    document.getElementById('config-apellido').value = d.apellido || '';
+                }
+            } catch (e) {
+                console.error("Error al cargar configuración:", e);
+            }
+        };
+
+        window.actualizarPerfilUsuario = async function(event) {
+            event.preventDefault();
+            const user = auth.currentUser;
+            if (!user) return;
+
+            const nuevoNombre = document.getElementById('config-nombre').value;
+            const nuevoApellido = document.getElementById('config-apellido').value;
+
+            try {
+                const docRef = doc(db, "Usuarios", user.uid);
+                await setDoc(docRef, {
+                    nombre: nuevoNombre,
+                    apellido: nuevoApellido
+                }, { merge: true });
+
+                const nombreCompleto = `${nuevoNombre} ${nuevoApellido}`.trim();
+                document.getElementById('user-name-display').innerText = nombreCompleto;
+                document.getElementById('panel-user-title').innerText = nombreCompleto;
+                document.getElementById('info-nombre').innerText = nuevoNombre;
+                document.getElementById('info-apellido').innerText = nuevoApellido;
+                
+                const inicial = nuevoNombre ? nuevoNombre.charAt(0).toUpperCase() : 'U';
+                const avatarDiv = document.getElementById('user-avatar-initial');
+                if(avatarDiv) avatarDiv.innerText = inicial;
+
+                alert("¡Perfil actualizado con éxito!");
+            } catch (error) {
+                alert("Error al actualizar el perfil: " + error.message);
+            }
+        };
+
+        window.cerrarSesionCompleta = async function() {
+            try {
+                await signOut(auth);
+                alert("Has cerrado sesión correctamente.");
+                window.cambiarVista('inicio');
+            } catch (error) {
+                alert("Error al cerrar sesión: " + error.message);
+            }
+        };
+
+        // --- SISTEMA DE SKINS 3D REALISTAS EN THREE.JS ---
+        let sceneAvatars, cameraAvatars, rendererAvatars, avatarActualGroup;
+        let avatarRenderIniciado = false;
+
+        window.inicializarAvatarMillonario3D = function(tipoSkin = 'novato') {
+            const container = document.getElementById('avatar-canvas-container');
+            if (!container) return;
+
+            if (avatarRenderIniciado && rendererAvatars) {
+                container.innerHTML = '';
+                avatarRenderIniciado = false;
+            }
+
+            document.querySelectorAll('.btn-skin-selector').forEach(btn => {
+                btn.style.borderColor = 'var(--border-color)';
+                btn.style.background = 'rgba(28, 35, 43, 0.6)';
+            });
+            const btnActivo = document.getElementById(`btn-skin-${tipoSkin}`);
+            if(btnActivo) {
+                btnActivo.style.borderColor = 'var(--accent-perfil)';
+                btnActivo.style.background = 'rgba(217, 56, 56, 0.15)';
+            }
+
+            sceneAvatars = new THREE.Scene();
+            cameraAvatars = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 1000);
+            cameraAvatars.position.set(0, 1.3, 3.5);
+
+            rendererAvatars = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            rendererAvatars.setSize(container.clientWidth, container.clientHeight);
+            rendererAvatars.setClearColor(0x000000, 0);
+            container.appendChild(rendererAvatars.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+            sceneAvatars.add(ambientLight);
+
+            const keyLight = new THREE.DirectionalLight(0xfff5e6, 1.2);
+            keyLight.position.set(3, 5, 4);
+            sceneAvatars.add(keyLight);
+
+            const rimLight = new THREE.DirectionalLight(0xd93838, 0.8);
+            rimLight.position.set(0, 5, -3);
+            sceneAvatars.add(rimLight);
+
+            avatarActualGroup = new THREE.Group();
+
+            const headGeo = new THREE.SphereGeometry(0.31, 32, 32);
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.35 });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 1.15;
+            avatarActualGroup.add(head);
+
+            if (tipoSkin === 'novato') {
+                const hairMat = new THREE.MeshStandardMaterial({ color: 0x3d2314, roughness: 0.3 });
+                const pelo = new THREE.Mesh(new THREE.SphereGeometry(0.33, 24, 24, 0, Math.PI * 2, 0, Math.PI * 0.6), hairMat);
+                pelo.position.set(0, 1.22, -0.02);
+                pelo.rotation.x = -0.15;
+                avatarActualGroup.add(pelo);
+
+                const camisaMat = new THREE.MeshStandardMaterial({ color: 0xf5f6fa, roughness: 0.5 });
+                const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.28, 0.8, 32), camisaMat);
+                torso.position.y = 0.45;
+                avatarActualGroup.add(torso);
+
+                const corbataMat = new THREE.MeshStandardMaterial({ color: 0x00a8ff, roughness: 0.3 });
+                const corbata = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.4, 16), corbataMat);
+                corbata.position.set(0, 0.65, 0.22);
+                corbata.rotation.z = Math.PI;
+                avatarActualGroup.add(corbata);
+            } else if (tipoSkin === 'seminovato') {
+                const jacketMat = new THREE.MeshStandardMaterial({ color: 0x9b59b6, roughness: 0.4 });
+                const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.28, 0.8, 32), jacketMat);
+                torso.position.y = 0.45;
+                avatarActualGroup.add(torso);
+
+                const headphoneMat = new THREE.MeshStandardMaterial({ color: 0xf1c40f, metalness: 0.8 });
+                const band = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.03, 16, 32, Math.PI), headphoneMat);
+                band.rotation.x = Math.PI / 2;
+                band.position.set(0, 1.2, 0);
+                avatarActualGroup.add(band);
+            } else if (tipoSkin === 'gamer') {
+                const armorMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8, roughness: 0.2 });
+                const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.28, 0.82, 32), armorMat);
+                torso.position.y = 0.45;
+                avatarActualGroup.add(torso);
+
+                const neonMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff, emissive: 0x00f0ff, emissiveIntensity: 0.8 });
+                const lineaNeon = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.04, 0.04), neonMat);
+                lineaNeon.position.set(0, 0.6, 0.25);
+                avatarActualGroup.add(lineaNeon);
+
+                const visorMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff, metalness: 0.9, roughness: 0.1 });
+                const visor = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.15), visorMat);
+                visor.position.set(0, 1.18, 0.22);
+                avatarActualGroup.add(visor);
+            } else if (tipoSkin === 'chef') {
+                const jacketMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 });
+                const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.28, 0.8, 32), jacketMat);
+                torso.position.y = 0.45;
+                avatarActualGroup.add(torso);
+
+                const gorroChefMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+                const gorro = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.35, 32), gorroChefMat);
+                gorro.position.set(0, 1.4, 0);
+                avatarActualGroup.add(gorro);
+            } else {
+                const jacketMat = new THREE.MeshStandardMaterial({ color: 0x11161d, roughness: 0.4, metalness: 0.2 });
+                const jacket = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.28, 0.85, 32), jacketMat);
+                jacket.position.y = 0.45;
+                avatarActualGroup.add(jacket);
+
+                const hairMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.2 });
+                const hair = new THREE.Mesh(new THREE.SphereGeometry(0.33, 24, 24, 0, Math.PI * 2, 0, Math.PI * 0.5), hairMat);
+                hair.position.set(0, 1.22, -0.02);
+                hair.rotation.x = -0.2;
+                avatarActualGroup.add(hair);
+
+                const tieMat = new THREE.MeshStandardMaterial({ color: 0xd93838, metalness: 0.8, roughness: 0.2 });
+                const tie = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.45, 16), tieMat);
+                tie.position.set(0, 0.65, 0.22);
+                tie.rotation.z = Math.PI;
+                avatarActualGroup.add(tie);
+            }
+
+            sceneAvatars.add(avatarActualGroup);
+
+            function animateAvatars() {
+                requestAnimationFrame(animateAvatars);
+                if (avatarActualGroup) {
+                    avatarActualGroup.rotation.y += 0.005;
+                }
+                rendererAvatars.render(sceneAvatars, cameraAvatars);
+            }
+            animateAvatars();
+            avatarRenderIniciado = true;
+        };
+
+        onAuthStateChanged(auth, async (user) => {
+            const btnNav = document.getElementById('btn-login-nav');
+            const navDashboard = document.getElementById('nav-dashboard');
+            const userNameDisplay = document.getElementById('user-name-display');
+            const panelUserTitle = document.getElementById('panel-user-title');
+            
+            if (user) {
+                btnNav.innerText = "Cerrar Sesión";
+                btnNav.onclick = () => signOut(auth).then(() => window.cambiarVista('inicio'));
+                if(navDashboard) navDashboard.style.display = "flex";
+                
+                const docSnap = await getDoc(doc(db, "Usuarios", user.uid));
+                if (docSnap.exists()) {
+                    const d = docSnap.data();
+                    const nombreCompleto = `${d.nombre || ''} ${d.apellido || ''}`.trim();
+                    if(userNameDisplay) userNameDisplay.innerText = nombreCompleto || user.email;
+                    if(panelUserTitle) panelUserTitle.innerText = nombreCompleto || user.email;
+
+                    const puntosVal = (d.puntos || 0).toLocaleString();
+                    const ticketsVal = d.tickets || 0;
+
+                    document.getElementById('user-points-display').innerText = puntosVal;
+                    document.getElementById('info-puntos').innerText = puntosVal;
+                    document.getElementById('minijuego-puntos-display').innerText = puntosVal;
+                    
+                    document.getElementById('info-tickets').innerText = ticketsVal;
+                    document.getElementById('negocios-tickets-display').innerText = ticketsVal;
+
+                    document.getElementById('info-ahorro').innerText = `$${(d.ahorroTotal || 0).toLocaleString()} COP`;
+                    document.getElementById('info-racha').innerText = d.racha || 1;
+                    
+                    window.actualizarNivelYBarra(ticketsVal);
+
+                    const inicial = d.nombre ? d.nombre.charAt(0).toUpperCase() : 'U';
+                    const avatarDiv = document.getElementById('user-avatar-initial');
+                    if(avatarDiv) avatarDiv.innerText = inicial;
+                }
+            } else {
+                btnNav.innerText = "Iniciar Sesión";
+                btnNav.onclick = () => window.cambiarVista('login');
+                if(navDashboard) navDashboard.style.display = "none";
+                document.getElementById('minijuego-puntos-display').innerText = '0';
+                document.getElementById('negocios-tickets-display').innerText = '0';
+            }
+        });
+    </script>
+
+    <style>
+        :root {
+            --bg-main: #07090d;
+            --bg-card: rgba(19, 25, 33, 0.75);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --accent-gold: #f39c12;
+            --accent-gold-hover: #e08b0b;
+            --glow-accent: rgba(243, 156, 18, 0.15);
+            --accent-perfil: #d93838;
+            --glow-perfil: rgba(217, 56, 56, 0.25);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { 
+            background-color: var(--bg-main); 
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(243, 156, 18, 0.04) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(52, 152, 219, 0.04) 0%, transparent 40%);
+            color: #E2E8F0; 
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; 
+        }
+        
+        header { 
+            height: 80px; 
+            background: rgba(13, 18, 24, 0.85); 
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color); 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            padding: 0 2rem; 
+            position: sticky; 
+            top: 0; 
+            z-index: 50; 
+        }
+
+        .logo-area { display: flex; align-items: center; gap: 1rem; cursor: pointer; }
+        .logo-area img { height: 42px; width: auto; object-fit: contain; filter: drop-shadow(0 0 8px rgba(243,156,18,0.3)); }
+        .logo-area h1 { font-size: 1.6rem; font-weight: 900; letter-spacing: 3px; color: white; background: linear-gradient(135deg, #fff, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        
+        .search-bar { flex: 1; max-width: 480px; margin: 0 2rem; position: relative; }
+        .search-bar input { 
+            width: 100%; 
+            background: rgba(28, 35, 43, 0.6); 
+            border: 1px solid var(--border-color); 
+            border-radius: 9999px; 
+            padding: 0.65rem 1rem 0.65rem 2.8rem; 
+            color: white; 
+            outline: none; 
+            transition: all 0.3s ease;
+        }
+        .search-bar input:focus { border-color: var(--accent-gold); box-shadow: 0 0 15px var(--glow-accent); background: rgba(28, 35, 43, 0.9); }
+        .search-bar i { position: absolute; left: 1.1rem; top: 50%; transform: translateY(-50%); color: #64748b; }
+
+        .user-menu { display: flex; align-items: center; gap: 1.2rem; }
+        .user-pill { 
+            display: flex; 
+            align-items: center; 
+            gap: 0.75rem; 
+            background: rgba(28, 35, 43, 0.6); 
+            padding: 0.35rem 0.9rem; 
+            border-radius: 9999px; 
+            border: 1px solid var(--border-color); 
+            cursor: pointer; 
+            max-width: 220px; 
+            transition: all 0.3s;
+        }
+        .user-pill:hover { border-color: rgba(255,255,255,0.2); background: rgba(28, 35, 43, 0.9); }
+        
+        .btn-action { 
+            background: linear-gradient(135deg, #e50914, #b20710); 
+            color: white; 
+            font-weight: 700; 
+            padding: 0.6rem 1.2rem; 
+            border-radius: 0.75rem; 
+            border: none; 
+            cursor: pointer; 
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(229, 9, 20, 0.3);
+        }
+        .btn-action:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(229, 9, 20, 0.5); }
+
+        .app-layout { display: flex; min-height: calc(100vh - 80px); }
+        
+        aside { 
+            width: 270px; 
+            background: rgba(13, 18, 24, 0.6); 
+            backdrop-filter: blur(8px);
+            border-right: 1px solid var(--border-color); 
+            padding: 1.5rem; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+        }
+        aside nav { display: flex; flex-direction: column; gap: 0.4rem; }
+        aside nav button { 
+            width: 100%; 
+            display: flex; 
+            align-items: center; 
+            gap: 1rem; 
+            padding: 0.8rem 1rem; 
+            background: transparent; 
+            border: none; 
+            color: #94a3b8; 
+            font-weight: 600; 
+            font-size: 0.9rem;
+            border-radius: 0.75rem; 
+            cursor: pointer; 
+            text-align: left; 
+            transition: all 0.25s ease;
+        }
+        aside nav button:hover { background: rgba(255, 255, 255, 0.05); color: white; transform: translateX(4px); }
+
+        main { flex: 1; padding: 2.5rem; overflow-y: auto; max-height: calc(100vh - 80px); }
+        .view-section { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .view-section.active-view { display: block; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .grid-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; }
+        
+        .card-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
+        .mini-card { 
+            background: var(--bg-card); 
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color); 
+            padding: 1.5rem 1rem; 
+            border-radius: 1rem; 
+            cursor: pointer; 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            text-align: center;
+        }
+        .mini-card:hover { border-color: var(--accent-gold); transform: translateY(-3px); box-shadow: 0 8px 25px var(--glow-accent); }
+
+        .empresas-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+        .empresa-card { 
+            background: var(--bg-card); 
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color); 
+            border-radius: 1rem; 
+            padding: 1.2rem; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+            height: 210px;
+            transition: all 0.3s ease;
+        }
+        .empresa-card:hover { border-color: rgba(255,255,255,0.2); transform: translateY(-2px); }
+        
+        .widgets-column { display: flex; flex-direction: column; gap: 1.5rem; }
+        .widget-box { 
+            background: var(--bg-card); 
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color); 
+            border-radius: 1.25rem; 
+            padding: 1.75rem; 
+            text-align: center; 
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3); 
+        }
+
+        .auth-container { 
+            max-width: 480px; 
+            margin: 2rem auto; 
+            background: var(--bg-card); 
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color); 
+            padding: 2.5rem; 
+            border-radius: 1.5rem; 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.5); 
+        }
+        .auth-container input { 
+            width: 100%; 
+            padding: 0.8rem 1rem; 
+            background: rgba(7, 11, 16, 0.8); 
+            border: 1px solid var(--border-color); 
+            border-radius: 0.75rem; 
+            color: white; 
+            margin-top: 0.4rem; 
+            margin-bottom: 1.2rem; 
+            outline: none; 
+            transition: all 0.3s;
+        }
+        .auth-container input:focus { border-color: var(--accent-gold); box-shadow: 0 0 12px var(--glow-accent); }
+
+        .panel-gamer-card {
+            background: linear-gradient(145deg, rgba(19, 25, 33, 0.85), rgba(28, 37, 48, 0.85));
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 1.25rem;
+            padding: 1.8rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .panel-gamer-card:hover {
+            border-color: rgba(217, 56, 56, 0.5);
+            box-shadow: 0 12px 35px var(--glow-perfil);
+        }
+
+        .panel-gamer-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--accent-perfil), transparent);
+            opacity: 0.9;
+        }
+
+        .stat-box-animado {
+            background: rgba(13, 18, 24, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 1rem;
+            padding: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-box-animado:hover {
+            border-color: var(--accent-perfil);
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px var(--glow-perfil);
+        }
+
+        .icono-puntos-estatico {
+            font-size: 1.5rem;
+            color: #ffe100;
+            background: rgba(255, 225, 0, 0.1);
+            padding: 12px;
+            border-radius: 50%;
+        }
+
+        .icono-ticket-fisico {
+            position: relative;
+            width: 48px;
+            height: 36px;
+            background: linear-gradient(135deg, #ff3366, #b20710);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 900;
+            box-shadow: 0 4px 12px rgba(229, 9, 20, 0.4);
+            clip-path: polygon(0% 0%, 100% 0%, 100% 30%, 92% 38%, 92% 62%, 100% 70%, 100% 100%, 0% 100%, 0% 70%, 8% 62%, 8% 38%, 0% 30%);
+        }
+
+        .icono-ahorro-pro {
+            font-size: 1.5rem;
+            color: #2ecc71;
+            background: rgba(46, 204, 113, 0.15);
+            padding: 12px;
+            border-radius: 50%;
+            box-shadow: 0 0 12px rgba(46, 204, 113, 0.3);
+        }
+
+        .icono-racha-fisicas {
+            font-size: 1.5rem;
+            color: #ff7700;
+            background: linear-gradient(135deg, #ff5500, #ffbb00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .stat-box-animado:hover .icono-racha-fisicas {
+            transform: scale(1.3) rotate(15deg) translateY(-2px);
+        }
+
+        .badge-nivel-gamer {
+            background: linear-gradient(135deg, var(--accent-perfil), #b52a2a);
+            color: white;
+            font-weight: 900;
+            padding: 0.35rem 0.9rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            display: inline-block;
+            box-shadow: 0 0 15px var(--glow-perfil);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .bottom-nav-mobile {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 65px;
+            background: rgba(13, 18, 24, 0.95);
+            backdrop-filter: blur(12px);
+            border-top: 1px solid var(--border-color);
+            display: none;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .bottom-nav-mobile button {
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.65rem;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .bottom-nav-mobile button i {
+            font-size: 1.2rem;
+        }
+
+        .bottom-nav-mobile button.active {
+            color: var(--accent-gold) !important;
+        }
+
+        @media (max-width: 768px) {
+            aside { display: none !important; }
+            .bottom-nav-mobile { display: flex !important; }
+            main { padding: 1rem !important; padding-bottom: 80px !important; max-height: none !important; }
+            .grid-layout { grid-template-columns: 1fr !important; gap: 1.2rem !important; }
+            .card-grid-4, .empresas-grid { grid-template-columns: repeat(2, 1fr) !important; }
+            header { padding: 0 1rem !important; }
+            .search-bar { display: none; }
+            #avatar-canvas-container { height: 200px !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-area" onclick="window.cambiarVista('inicio')">
+            <img src="./assets/img/LOGO.png" alt="Logo Locus" id="logo-imagen-principal" crossorigin="anonymous">
+            <h1>LOCUS</h1>
+        </div>
+        <div class="search-bar">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" placeholder="Buscar empresas, descuentos o beneficios...">
+        </div>
+        <div class="user-menu">
+            <div class="user-pill" onclick="window.cambiarVista('dashboard-usuario')">
+                <div id="user-avatar-initial" style="width: 34px; height: 34px; background: var(--accent-gold); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #07090d; flex-shrink: 0;">?</div>
+                <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: none;">
+                    <div id="user-name-display" style="font-size: 0.85rem; font-weight: bold;">Inicia sesión</div>
+                </div>
+            </div>
+            <button id="btn-login-nav" class="btn-action" onclick="window.cambiarVista('login')">Entrar</button>
+        </div>
+    </header>
+
+    <div class="app-layout">
+        <aside>
+            <nav>
+                <button onclick="window.cambiarVista('inicio')"><i class="fa-solid fa-house"></i> Inicio</button>
+                <button id="nav-dashboard" onclick="window.cambiarVista('dashboard-usuario')"><i class="fa-solid fa-user"></i> Mi Panel</button>
+                <button onclick="window.cambiarVista('vip')"><i class="fa-solid fa-store" style="color: var(--accent-gold);"></i> Negocios</button>
+                <button onclick="window.cambiarVista('tienda')"><i class="fa-solid fa-percent"></i> Descuentos</button>
+                <button onclick="window.cambiarVista('misiones')"><i class="fa-solid fa-bullseye"></i> Misiones</button>
+                <button onclick="window.cambiarVista('minijuegos')"><i class="fa-solid fa-gamepad" style="color: var(--accent-gold);"></i> Zona de Juegos 🎮</button>
+                <button onclick="window.cambiarVista('tienda')"><i class="fa-solid fa-gift"></i> Recompensas</button>
+                <button onclick="window.cambiarVista('configuracion')"><i class="fa-solid fa-gear"></i> Configuración</button>
+            </nav>
+            <div style="background: rgba(28, 35, 43, 0.7); backdrop-filter: blur(8px); padding: 1.2rem; border-radius: 1rem; text-align: center; border: 1px solid var(--border-color);">
+                <i class="fa-solid fa-crown" style="color: var(--accent-gold); font-size: 1.4rem; margin-bottom: 0.4rem;"></i>
+                <h4 style="font-size: 0.85rem; margin-bottom: 0.2rem; color: white;">¿Tienes un negocio?</h4>
+                <p style="font-size: 0.7rem; color: #94a3b8; margin-bottom: 0.8rem;">Conecta con miles de clientes en Locus.</p>
+                <button onclick="document.getElementById('modal-login-empresa').style.display = 'flex'" style="width: 100%; background: var(--accent-gold); border: none; font-weight: bold; font-size: 0.8rem; padding: 0.55rem; border-radius: 0.5rem; cursor: pointer; color: #07090d;">Acceso Socios</button>
+            </div>
+        </aside>
+
+        <main>
+            <!-- VISTA INICIO -->
+            <section id="vista-inicio" class="view-section active-view">
+                <div class="grid-layout">
+                    <div>
+                        <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(19, 25, 33, 0.5); border: 1px solid var(--border-color); padding: 0.85rem 1.2rem; border-radius: 0.85rem; margin-bottom: 1.5rem; backdrop-filter: blur(8px);">
+                            <span style="font-size: 0.85rem; color: #94a3b8;"><i class="fa-solid fa-bolt" style="color: var(--accent-gold); margin-right: 0.4rem;"></i> Bienvenido a <strong style="color: white;">LOCUS</strong></span>
+                            <span style="font-size: 0.75rem; color: var(--accent-gold); cursor: pointer; font-weight: bold;" onclick="window.cambiarVista('misiones')">Misiones →</span>
+                        </div>
+
+                        <div class="card-grid-4">
+                            <div class="mini-card" onclick="window.cambiarVista('dashboard-usuario')">
+                                <i class="fa-solid fa-user" style="color: var(--accent-gold); font-size: 1.2rem; margin-bottom: 0.5rem;"></i>
+                                <h4 style="font-size: 0.85rem; color: white;">Mi Panel</h4>
+                            </div>
+                            <div class="mini-card" onclick="window.cambiarVista('tienda')">
+                                <i class="fa-solid fa-percent" style="color: var(--accent-gold); font-size: 1.2rem; margin-bottom: 0.5rem;"></i>
+                                <h4 style="font-size: 0.85rem; color: white;">Descuentos</h4>
+                            </div>
+                            <div class="mini-card" onclick="window.cambiarVista('misiones')">
+                                <i class="fa-solid fa-bullseye" style="color: var(--accent-gold); font-size: 1.2rem; margin-bottom: 0.5rem;"></i>
+                                <h4 style="font-size: 0.85rem; color: white;">Misiones</h4>
+                            </div>
+                            <div class="mini-card" onclick="window.cambiarVista('minijuegos')">
+                                <i class="fa-solid fa-gamepad" style="color: var(--accent-gold); font-size: 1.2rem; margin-bottom: 0.5rem;"></i>
+                                <h4 style="font-size: 0.85rem; color: white;">Zona Arcade</h4>
+                            </div>
+                        </div>
+
+                        <h3 style="font-size: 1.1rem; margin-bottom: 1rem; color: white;"><i class="fa-solid fa-store" style="color: var(--accent-gold);"></i> Negocios Destacados</h3>
+                        <div class="empresas-grid">
+                            <div class="empresa-card" onclick="window.cambiarVista('vip')" style="cursor: pointer;">
+                                <div style="background: rgba(245, 158, 11, 0.1); height: 75px; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-weight: bold; color: var(--accent-gold);">Juan Valdez</div>
+                                <span style="background: var(--accent-gold); color: black; font-size: 0.65rem; font-weight: bold; padding: 0.2rem 0.5rem; border-radius: 0.25rem; width: max-content;">15% OFF</span>
+                                <h5 style="font-size: 0.8rem; color: white;">Café y bebidas</h5>
+                            </div>
+                            <div class="empresa-card" onclick="window.cambiarVista('vip')" style="cursor: pointer;">
+                                <div style="background: rgba(234, 179, 8, 0.1); height: 75px; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #eab308;">Smart Fit</div>
+                                <span style="background: var(--accent-gold); color: black; font-size: 0.65rem; font-weight: bold; padding: 0.2rem 0.5rem; border-radius: 0.25rem; width: max-content;">20% OFF</span>
+                                <h5 style="font-size: 0.8rem; color: white;">Gimnasio</h5>
+                            </div>
+                            <div class="empresa-card" onclick="window.cambiarVista('vip')" style="cursor: pointer;">
+                                <div style="background: rgba(239, 68, 68, 0.1); height: 75px; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #ef4444;">Adidas</div>
+                                <span style="background: var(--accent-gold); color: black; font-size: 0.65rem; font-weight: bold; padding: 0.2rem 0.5rem; border-radius: 0.25rem; width: max-content;">10% OFF</span>
+                                <h5 style="font-size: 0.8rem; color: white;">Moda</h5>
+                            </div>
+                            <div class="empresa-card" onclick="window.cambiarVista('vip')" style="cursor: pointer;">
+                                <div style="background: rgba(249, 115, 22, 0.1); height: 75px; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #f97316;">El Corral</div>
+                                <span style="background: var(--accent-gold); color: black; font-size: 0.65rem; font-weight: bold; padding: 0.2rem 0.5rem; border-radius: 0.25rem; width: max-content;">15% OFF</span>
+                                <h5 style="font-size: 0.8rem; color: white;">Comida Rapida</h5>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="widgets-column">
+                        <div class="widget-box">
+                            <i class="fa-solid fa-coins" style="color: var(--accent-gold); font-size: 1.8rem; margin-bottom: 0.5rem;"></i>
+                            <h4 style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">Tus puntos LOCUS</h4>
+                            <div id="user-points-display" style="font-size: 2.2rem; font-weight: 900; margin: 0.5rem 0; color: white;">0</div>
+                            <button onclick="window.cambiarVista('tienda')" style="width: 100%; background: rgba(28, 35, 43, 0.8); border: 1px solid var(--border-color); color: white; padding: 0.65rem; border-radius: 0.75rem; cursor: pointer;">Ver recompensas →</button>
+                        </div>
+
+                        <div class="widget-box">
+                            <i class="fa-solid fa-gamepad" style="color: var(--accent-gold); font-size: 1.8rem; margin-bottom: 0.5rem;"></i>
+                            <h4 style="font-size: 1rem; font-weight: bold; color: white;">¡Zona Arcade!</h4>
+                            <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 1rem;">Lucha ragdoll y simulador de hamburguesa.</p>
+                            <button onclick="window.cambiarVista('minijuegos')" style="width: 100%; background: var(--accent-gold); border: none; color: #07090d; font-weight: bold; padding: 0.65rem; border-radius: 0.75rem; cursor: pointer;">Jugar ahora →</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VISTA: MI PANEL DE USUARIO & SELECCIÓN DE SKINS 3D -->
+            <section id="vista-dashboard-usuario" class="view-section">
+                <div style="margin-bottom: 1.5rem;">
+                    <h2 style="color: var(--accent-perfil); font-size: 1.3rem; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase;">PANEL DE CONTROL & SKINS 3D</h2>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 2rem;" class="grid-layout">
+                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                        <div class="panel-gamer-card">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.2rem;">
+                                <div style="display: flex; align-items: center; gap: 0.8rem;">
+                                    <div style="width: 42px; height: 42px; background: linear-gradient(135deg, var(--accent-perfil), #b52a2a); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-weight: bold; color: white;">
+                                        <i class="fa-solid fa-user-shield"></i>
+                                    </div>
+                                    <div>
+                                        <h3 style="font-size: 1rem; color: white;" id="panel-user-title">Cargando usuario...</h3>
+                                        <p style="font-size: 0.75rem; color: #94a3b8;" id="info-email">--</p>
+                                    </div>
+                                </div>
+                                <span class="badge-nivel-gamer" id="info-nivel">Nivel 1</span>
+                            </div>
+
+                            <div style="background: rgba(13, 18, 24, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 0.85rem; padding: 0.9rem 1rem; margin-bottom: 1.2rem;">
+                                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: bold; margin-bottom: 0.4rem;">
+                                    <span id="texto-nivel-actual" style="color: var(--accent-perfil);">Nivel 1</span>
+                                    <span id="texto-siguiente-nivel" style="color: #94a3b8;">Nivel 2</span>
+                                </div>
+                                <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 9999px; overflow: hidden;">
+                                    <div id="barra-progreso-nivel" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent-perfil), #b52a2a); border-radius: 9999px; transition: width 0.4s ease;"></div>
+                                </div>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                <div class="stat-box-animado">
+                                    <div class="icono-puntos-estatico"><i class="fa-solid fa-star"></i></div>
+                                    <div>
+                                        <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: bold;">Puntos</span>
+                                        <div id="info-puntos" style="font-size: 1.2rem; font-weight: 900; color: white;">0</div>
+                                    </div>
+                                </div>
+                                <div class="stat-box-animado">
+                                    <div class="icono-ticket-fisico">%</div>
+                                    <div>
+                                        <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: bold;">Tickets</span>
+                                        <div id="info-tickets" style="font-size: 1.2rem; font-weight: 900; color: white;">0</div>
+                                    </div>
+                                </div>
+                                <div class="stat-box-animado">
+                                    <div class="icono-ahorro-pro"><i class="fa-solid fa-piggy-bank"></i></div>
+                                    <div>
+                                        <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: bold;">Ahorro</span>
+                                        <div id="info-ahorro" style="font-size: 0.95rem; font-weight: 900; color: #2ecc71;">$0 COP</div>
+                                    </div>
+                                </div>
+                                <div class="stat-box-animado">
+                                    <div class="icono-racha-fisicas"><i class="fa-solid fa-fire-flame-curved"></i></div>
+                                    <div>
+                                        <span style="font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; font-weight: bold;">Racha</span>
+                                        <div style="font-size: 1.1rem; font-weight: 900; color: white;"><span id="info-racha">0</span> días</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- COLUMNA DERECHA: VISOR 3D Y SELECTOR DE SKINS -->
+                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                        <div class="panel-gamer-card" style="text-align: center; padding: 1.2rem;">
+                            <h3 style="margin-bottom: 0.5rem; font-size: 1rem; color: white; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                                <i class="fa-solid fa-crown" style="color: var(--accent-perfil);"></i> Visualizador 3D
+                            </h3>
+                            <div id="avatar-canvas-container" style="width: 100%; height: 220px; border-radius: 0.75rem; background: rgba(7, 11, 16, 0.5); overflow: hidden; border: 1px solid var(--border-color); margin-bottom: 1rem;"></div>
+                            
+                            <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.6rem;">Selecciona tu Skin Activo:</p>
+                            <div style="display: flex; gap: 0.4rem; justify-content: center; flex-wrap: wrap;">
+                                <button id="btn-skin-novato" class="btn-skin-selector" onclick="window.inicializarAvatarMillonario3D('novato')" style="background: rgba(28, 35, 43, 0.6); border: 1px solid var(--border-color); color: white; font-size: 0.7rem; padding: 0.4rem 0.7rem; border-radius: 0.5rem; cursor: pointer;">🌱 Novato</button>
+                                <button id="btn-skin-seminovato" class="btn-skin-selector" onclick="window.inicializarAvatarMillonario3D('seminovato')" style="background: rgba(28, 35, 43, 0.6); border: 1px solid var(--border-color); color: white; font-size: 0.7rem; padding: 0.4rem 0.7rem; border-radius: 0.5rem; cursor: pointer;">🎧 Skater</button>
+                                <button id="btn-skin-gamer" class="btn-skin-selector" onclick="window.inicializarAvatarMillonario3D('gamer')" style="background: rgba(28, 35, 43, 0.6); border: 1px solid var(--border-color); color: white; font-size: 0.7rem; padding: 0.4rem 0.7rem; border-radius: 0.5rem; cursor: pointer;">🎮 Gamer Pro</button>
+                                <button id="btn-skin-chef" class="btn-skin-selector" onclick="window.inicializarAvatarMillonario3D('chef')" style="background: rgba(28, 35, 43, 0.6); border: 1px solid var(--border-color); color: white; font-size: 0.7rem; padding: 0.4rem 0.7rem; border-radius: 0.5rem; cursor: pointer;">🍔 Chef</button>
+                                <button id="btn-skin-millonario" class="btn-skin-selector" onclick="window.inicializarAvatarMillonario3D('millonario')" style="background: rgba(28, 35, 43, 0.6); border: 1px solid var(--border-color); color: white; font-size: 0.7rem; padding: 0.4rem 0.7rem; border-radius: 0.5rem; cursor: pointer;">🕶️ Ejecutivo</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VISTA: ZONA DE MINIJUEGOS (Con Puntos visibles para jugar) -->
+            <section id="vista-minijuegos" class="view-section">
+                <div class="auth-container" style="max-width: 500px; text-align: center;">
+                    <!-- INDICADOR DE PUNTOS ARRIBA EN MINIJUEGOS -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(13, 18, 24, 0.8); border: 1px solid var(--border-color); padding: 0.6rem 1rem; border-radius: 0.75rem; margin-bottom: 1.2rem;">
+                        <span style="font-size: 0.8rem; color: #94a3b8;"><i class="fa-solid fa-coins" style="color: var(--accent-gold);"></i> Puntos disponibles:</span>
+                        <span id="minijuego-puntos-display" style="font-size: 1.1rem; font-weight: 900; color: white;">0</span>
+                    </div>
+
+                    <div id="selector-menu-juegos">
+                        <h2 style="color: var(--accent-gold); margin-bottom: 0.5rem;"><i class="fa-solid fa-gamepad"></i> Zona Arcade Locus</h2>
+                        <p style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 1.5rem;">Selecciona tu experiencia:</p>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 1rem;">
+                            <button class="btn-action" style="background: rgba(28, 35, 43, 0.6); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 1rem; box-shadow: none;" onclick="window.seleccionarMinijuego('pelea')">
+                                <span style="font-size: 0.95rem; color: white;"><i class="fa-solid fa-skull" style="color: #e74c3c; margin-right: 0.5rem;"></i> Stickfighter Ragdoll Pro</span>
+                                <span style="font-size: 0.7rem; background: rgba(231, 76, 60, 0.2); color: #e74c3c; border: 1px solid #e74c3c; padding: 0.2rem 0.5rem; border-radius: 0.3rem;">Acción</span>
+                            </button>
+
+                            <button class="btn-action" style="background: rgba(28, 35, 43, 0.6); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 1rem; box-shadow: none;" onclick="window.seleccionarMinijuego('hamburguesa')">
+                                <span style="font-size: 0.95rem; color: white;"><i class="fa-solid fa-burger" style="color: #f39c12; margin-right: 0.5rem;"></i> Burger Master Physics</span>
+                                <span style="font-size: 0.7rem; background: rgba(243, 156, 18, 0.2); color: var(--accent-gold); border: 1px solid var(--accent-gold); padding: 0.2rem 0.5rem; border-radius: 0.3rem;">Física Cocina</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="juego-pelea" class="contenedor-juego-activo" style="display: none;">
+                        <h2 style="color: var(--accent-gold); margin-bottom: 0.3rem;">Stickfighter Ragdoll Pro</h2>
+                        <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.6rem;">A/D: Mover | W: Saltar | F / Espacio: Atacar</p>
+                        <div style="position: relative; width: 100%; height: 300px; background: #07090d; border: 1px solid var(--border-color); border-radius: 0.75rem; overflow: hidden; margin-bottom: 0.8rem;">
+                            <canvas id="canvas-pelea" width="360" height="300" style="display: block; margin: 0 auto;"></canvas>
+                            <div id="overlay-pelea" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(7, 9, 13, 0.94); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;">
+                                <h3 id="titulo-overlay-pelea" style="color: white; font-size: 1.2rem; margin-bottom: 0.3rem;">Arena de Combate Físico</h3>
+                                <button class="btn-action" style="background: var(--accent-gold); color: #07090d; padding: 0.5rem 1.2rem; font-weight: bold;" onclick="window.iniciarMinijuegoPelea()">¡Iniciar Duelo Pro!</button>
+                            </div>
+                        </div>
+                        <button class="btn-action" style="width: 100%; background: rgba(28, 35, 43, 0.7); border: 1px solid var(--border-color); font-size: 0.8rem;" onclick="window.volverAlMenuMinijuegos()">← Volver al Menú</button>
+                    </div>
+
+                    <div id="juego-hamburguesa" class="contenedor-juego-activo" style="display: none;">
+                        <h2 style="color: var(--accent-gold); margin-bottom: 0.3rem;">Burger Master Physics</h2>
+                        <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.6rem;">A/D: Mover base | ESPACIO / S: Echar salsa.</p>
+                        <div style="position: relative; width: 100%; height: 300px; background: #0d1218; border: 1px solid var(--border-color); border-radius: 0.75rem; overflow: hidden; margin-bottom: 0.8rem;">
+                            <canvas id="canvas-hamburguesa" width="360" height="300" style="display: block; margin: 0 auto;"></canvas>
+                            <div id="overlay-hamburguesa" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(13, 18, 24, 0.94); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10;">
+                                <h3 id="titulo-overlay-hamburguesa" style="color: white; font-size: 1.2rem; margin-bottom: 0.3rem;">Simulador Gourmet</h3>
+                                <button class="btn-action" style="background: var(--accent-gold); color: #07090d; padding: 0.5rem 1.2rem; font-weight: bold;" onclick="window.iniciarMinijuegoHamburguesa()">¡Comenzar a Cocinar!</button>
+                            </div>
+                        </div>
+                        <button class="btn-action" style="width: 100%; background: rgba(28, 35, 43, 0.7); border: 1px solid var(--border-color); font-size: 0.8rem;" onclick="window.volverAlMenuMinijuegos()">← Volver al Menú</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VISTA: CONFIGURACIÓN -->
+            <section id="vista-configuracion" class="view-section">
+                <div style="background: rgba(19, 25, 33, 0.75); border: 1px solid var(--border-color); border-radius: 1.25rem; padding: 2rem; margin-bottom: 2rem;">
+                    <h2 style="color: var(--accent-gold); margin-bottom: 0.3rem;">Configuración de la Cuenta</h2>
+                    <p style="color: #94a3b8;">Actualiza tus datos personales en Locus.</p>
+                </div>
+            </section>
+
+            <!-- VISTA: MISIONES (Con Botón LOGROS) -->
+            <section id="vista-misiones" class="view-section">
+                <div class="auth-container" style="text-align: center;">
+                    <h2 style="color: white; margin-bottom: 0.5rem;">🎯 Misión Relámpago</h2>
+                    <p style="color: #94a3b8; font-size: 0.85rem; margin: 1rem 0;">Reclama tu recompensa diaria (+50 Puntos).</p>
+                    <button id="btn-mision" class="btn-action" style="width: 100%; background: var(--accent-gold); color: #07090d; font-weight: bold; margin-bottom: 1rem;" onclick="window.completarMisionDiaria()">Reclamar Recompensa</button>
+                    
+                    <!-- BOTÓN LOGROS EN MISIONES -->
+                    <button class="btn-action" style="width: 100%; background: rgba(28, 35, 43, 0.8); border: 1px solid var(--border-color); color: white; font-weight: bold;" onclick="window.toggleModalLogros()">
+                        🏆 LOGROS
+                    </button>
+                </div>
+
+                <!-- MODAL DE LOGROS -->
+                <div id="modal-logros" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 3000; align-items: center; justify-content: center;">
+                    <div class="auth-container" style="position: relative; width: 90%; max-width: 420px; text-align: center;">
+                        <button onclick="window.toggleModalLogros()" style="position: absolute; top: 1rem; right: 1rem; background: transparent; border: none; color: white; font-size: 1.2rem; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
+                        <h2 style="color: var(--accent-gold); margin-bottom: 0.5rem;"><i class="fa-solid fa-trophy"></i> Logros de Minijuegos</h2>
+                        <p style="color: #94a3b8; font-size: 0.8rem; margin-bottom: 1.5rem;">Desbloquea medallas completando desafíos arcade.</p>
+                        
+                        <div style="background: rgba(13, 18, 24, 0.6); border: 1px solid var(--border-color); border-radius: 0.75rem; padding: 1.5rem; color: #94a3b8; font-style: italic;">
+                            Próximamente aquí aparecerán tus logros...
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VISTA: TIENDA -->
+            <section id="vista-tienda" class="view-section">
+                <div style="background: rgba(19, 25, 33, 0.75); border: 1px solid var(--border-color); border-radius: 1.25rem; padding: 2rem; margin-bottom: 2rem;">
+                    <h2 style="color: white; margin-bottom: 0.3rem;">🛍️ Recompensas Locus</h2>
+                    <p style="color: #94a3b8;">Canjea tus puntos por descuentos.</p>
+                </div>
+            </section>
+
+            <!-- VISTA: NEGOCIOS (Con Icono de Tickets Arriba a la Derecha) -->
+            <section id="vista-vip" class="view-section">
+                <div style="margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; position: relative;">
+                    <div>
+                        <h2 style="color: var(--accent-gold); font-size: 1.4rem; font-weight: 800; text-transform: uppercase;">Negocios</h2>
+                        <p style="color: #94a3b8; font-size: 0.85rem;">Explora los establecimientos y comercios con beneficios exclusivos.</p>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <!-- ICONO Y CONTADOR DE TICKETS ARRIBA A LA DERECHA -->
+                        <div style="display: flex; align-items: center; gap: 0.5rem; background: rgba(229, 9, 20, 0.15); border: 1px solid rgba(229, 9, 20, 0.4); padding: 0.4rem 0.9rem; border-radius: 9999px;">
+                            <div class="icono-ticket-fisico" style="width: 28px; height: 22px; font-size: 0.8rem;">%</div>
+                            <span style="font-size: 0.85rem; font-weight: bold; color: white;"><span id="negocios-tickets-display">0</span> Tickets</span>
+                        </div>
+
+                        <button onclick="document.getElementById('modal-login-empresa').style.display = 'flex'" style="background: rgba(243, 156, 18, 0.1); border: 1px solid var(--accent-gold); color: var(--accent-gold); padding: 0.5rem 1rem; border-radius: 0.75rem; cursor: pointer; font-size: 0.8rem; font-weight: bold;">
+                            <i class="fa-solid fa-crown" style="margin-right: 4px;"></i> Acceso Socios
+                        </button>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 0.6rem; overflow-x: auto; padding-bottom: 1rem; margin-bottom: 1.5rem;">
+                    <button class="btn-categoria-filtro" onclick="window.filtrarNegocios('todos', this)" style="background: var(--accent-gold); border: 1px solid var(--accent-gold); color: #07090d; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.8rem; font-weight: bold; cursor: pointer; white-space: nowrap;">Todos</button>
+                    <button class="btn-categoria-filtro" onclick="window.filtrarNegocios('bares', this)" style="background: rgba(28, 35, 43, 0.6); border: 1px solid var(--border-color); color: #94a3b8; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.8rem; font-weight: bold; cursor: pointer; white-space: nowrap;">🍻 Bares</button>
+                    <button class="btn-categoria-filtro" onclick="window.filtrarNegocios('discotecas', this)" style="background: rgba(28, 35, 43, 0.6); border: 1px solid var(--border-color); color: #94a3b8; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.8rem; font-weight: bold; cursor: pointer; white-space: nowrap;">🪩 Discotecas</button>
+                    <button class="btn-categoria-filtro" onclick="window.filtrarNegocios('comida-rapida', this)" style="background: rgba(28, 35, 43, 0.6); border: 1px solid var(--border-color); color: #94a3b8; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.8rem; font-weight: bold; cursor: pointer; white-space: nowrap;">🍔 Comida Rapida</button>
+                    <button class="btn-categoria-filtro" onclick="window.filtrarNegocios('dulce', this)" style="background: rgba(28, 35, 43, 0.6); border: 1px solid var(--border-color); color: #94a3b8; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.8rem; font-weight: bold; cursor: pointer; white-space: nowrap;">🍩 Dulce</button>
+                    <button class="btn-categoria-filtro" onclick="window.filtrarNegocios('barberias', this)" style="background: rgba(28, 35, 43, 0.6); border: 1px solid var(--border-color); color: #94a3b8; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.8rem; font-weight: bold; cursor: pointer; white-space: nowrap;">✂️ Barberias</button>
+                    <button class="btn-categoria-filtro" onclick="window.filtrarNegocios('tiendas', this)" style="background: rgba(28, 35, 43, 0.6); border: 1px solid var(--border-color); color: #94a3b8; padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.8rem; font-weight: bold; cursor: pointer; white-space: nowrap;">🛍️ Tiendas</button>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.2rem;" id="grilla-negocios">
+                    <div class="empresa-card" data-categoria="dulce" style="height: 210px; cursor: pointer;" onclick="alert('Juan Valdez: 15% de descuento en bebidas seleccionadas presentando tu ID de Locus.')">
+                        <div style="background: rgba(245, 158, 11, 0.12); height: 85px; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; color: var(--accent-gold);">
+                            <i class="fa-solid fa-mug-hot" style="margin-right: 8px;"></i> Juan Valdez
+                        </div>
+                        <span style="background: var(--accent-gold); color: black; font-size: 0.65rem; font-weight: bold; padding: 0.2rem 0.5rem; border-radius: 0.25rem; width: max-content;">15% OFF</span>
+                        <h5 style="font-size: 0.9rem; color: white;">Café, pastelería y postres</h5>
+                        <span style="font-size: 0.75rem; color: #3498db; font-weight: bold;">Ver beneficio →</span>
+                    </div>
+
+                    <div class="empresa-card" data-categoria="comida-rapida" style="height: 210px; cursor: pointer;" onclick="alert('El Corral: 15% de descuento en combos seleccionados.')">
+                        <div style="background: rgba(249, 115, 22, 0.12); height: 85px; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; color: #f97316;">
+                            <i class="fa-solid fa-burger" style="margin-right: 8px;"></i> El Corral
+                        </div>
+                        <span style="background: var(--accent-gold); color: black; font-size: 0.65rem; font-weight: bold; padding: 0.2rem 0.5rem; border-radius: 0.25rem; width: max-content;">15% OFF</span>
+                        <h5 style="font-size: 0.9rem; color: white;">Hamburguesas artesanales</h5>
+                        <span style="font-size: 0.75rem; color: #3498db; font-weight: bold;">Ver beneficio →</span>
+                    </div>
+
+                    <div class="empresa-card" data-categoria="tiendas" style="height: 210px; cursor: pointer;" onclick="alert('Smart Fit: 20% de descuento en la inscripción.')">
+                        <div style="background: rgba(234, 179, 8, 0.12); height: 85px; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; color: #eab308;">
+                            <i class="fa-solid fa-dumbbell" style="margin-right: 8px;"></i> Smart Fit
+                        </div>
+                        <span style="background: var(--accent-gold); color: black; font-size: 0.65rem; font-weight: bold; padding: 0.2rem 0.5rem; border-radius: 0.25rem; width: max-content;">20% OFF</span>
+                        <h5 style="font-size: 0.9rem; color: white;">Gimnasio y bienestar</h5>
+                        <span style="font-size: 0.75rem; color: #3498db; font-weight: bold;">Ver beneficio →</span>
+                    </div>
+
+                    <div class="empresa-card" data-categoria="tiendas" style="height: 210px; cursor: pointer;" onclick="alert('Adidas: 10% de descuento en tiendas físicas y online.')">
+                        <div style="background: rgba(239, 68, 68, 0.12); height: 85px; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; color: #ef4444;">
+                            <i class="fa-solid fa-shirt" style="margin-right: 8px;"></i> Adidas
+                        </div>
+                        <span style="background: var(--accent-gold); color: black; font-size: 0.65rem; font-weight: bold; padding: 0.2rem 0.5rem; border-radius: 0.25rem; width: max-content;">10% OFF</span>
+                        <h5 style="font-size: 0.9rem; color: white;">Moda y deportes</h5>
+                        <span style="font-size: 0.75rem; color: #3498db; font-weight: bold;">Ver beneficio →</span>
+                    </div>
+
+                    <div class="empresa-card" data-categoria="bares" style="height: 210px; cursor: pointer;" onclick="alert('The Pub: 2x1 en cervezas artesanales los jueves.')">
+                        <div style="background: rgba(52, 152, 219, 0.12); height: 85px; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; color: #3498db;">
+                            <i class="fa-solid fa-beer-mug-empty" style="margin-right: 8px;"></i> The Pub
+                        </div>
+                        <span style="background: var(--accent-gold); color: black; font-size: 0.65rem; font-weight: bold; padding: 0.2rem 0.5rem; border-radius: 0.25rem; width: max-content;">2x1</span>
+                        <h5 style="font-size: 0.9rem; color: white;">Bar y Cervecería</h5>
+                        <span style="font-size: 0.75rem; color: #3498db; font-weight: bold;">Ver beneficio →</span>
+                    </div>
+
+                    <div class="empresa-card" data-categoria="discotecas" style="height: 210px; cursor: pointer;" onclick="alert('Club Paradise: Ingreso VIP sin fila + cóctel de cortesía.')">
+                        <div style="background: rgba(155, 89, 182, 0.12); height: 85px; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; color: #9b59b6;">
+                            <i class="fa-solid fa-compact-disc" style="margin-right: 8px;"></i> Paradise
+                        </div>
+                        <span style="background: var(--accent-gold); color: black; font-size: 0.65rem; font-weight: bold; padding: 0.2rem 0.5rem; border-radius: 0.25rem; width: max-content;">VIP Pass</span>
+                        <h5 style="font-size: 0.9rem; color: white;">Discoteca y Rumba</h5>
+                        <span style="font-size: 0.75rem; color: #3498db; font-weight: bold;">Ver beneficio →</span>
+                    </div>
+
+                    <div class="empresa-card" data-categoria="barberias" style="height: 210px; cursor: pointer;" onclick="alert('Elite Barber: 20% de descuento en corte y barba.')">
+                        <div style="background: rgba(46, 204, 113, 0.12); height: 85px; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; color: #2ecc71;">
+                            <i class="fa-solid fa-scissors" style="margin-right: 8px;"></i> Elite Barber
+                        </div>
+                        <span style="background: var(--accent-gold); color: black; font-size: 0.65rem; font-weight: bold; padding: 0.2rem 0.5rem; border-radius: 0.25rem; width: max-content;">20% OFF</span>
+                        <h5 style="font-size: 0.9rem; color: white;">Cuidado personal masculino</h5>
+                        <span style="font-size: 0.75rem; color: #3498db; font-weight: bold;">Ver beneficio →</span>
+                    </div>
+                </div>
+
+                <div id="modal-login-empresa" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; align-items: center; justify-content: center;">
+                    <div class="auth-container" style="position: relative; width: 90%; max-width: 400px;">
+                        <button onclick="document.getElementById('modal-login-empresa').style.display = 'none'" style="position: absolute; top: 1rem; right: 1rem; background: transparent; border: none; color: white; font-size: 1.2rem; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
+                        <h2 style="color: white; margin-bottom: 0.3rem; text-align: center;">Acceso Socios / Empresas</h2>
+                        <form onsubmit="window.manejarLoginEmpresas(event)">
+                            <label style="font-size: 0.8rem; color: #94a3b8;">Correo Corporativo</label>
+                            <input type="email" id="empresa-email" required placeholder="empresa@convenio.com">
+                            <label style="font-size: 0.8rem; color: #94a3b8;">Contraseña</label>
+                            <input type="password" id="empresa-pass" required placeholder="••••••••">
+                            <button type="submit" class="btn-action" style="width: 100%; background: var(--accent-gold); color: #07090d; font-weight: bold; margin-top: 1rem;">Ingresar al Panel</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VISTA: LOGIN -->
+            <section id="vista-login" class="view-section">
+                <div class="auth-container">
+                    <h2 id="auth-title" style="text-align: center; margin-bottom: 1.5rem; color: white;">Iniciar Sesión</h2>
+                    <form onsubmit="window.manejarAutenticacion(event)">
+                        <div id="campos-registro" style="display: none;">
+                            <label style="font-size: 0.8rem; color: #94a3b8;">Nombre</label>
+                            <input type="text" id="nombre">
+                            <label style="font-size: 0.8rem; color: #94a3b8;">Apellido</label>
+                            <input type="text" id="apellido">
+                            <label style="font-size: 0.8rem; color: #94a3b8;">Edad (Mayor de 18)</label>
+                            <input type="number" id="edad" min="1" max="120">
+                        </div>
+                        <label style="font-size: 0.8rem; color: #94a3b8;">Correo</label>
+                        <input type="email" id="email" required>
+                        <label style="font-size: 0.8rem; color: #94a3b8;">Contraseña</label>
+                        <input type="password" id="password" required>
+                        <button type="submit" id="auth-submit-btn" class="btn-action" style="width: 100%; margin-top: 1rem;">Entrar a Locus</button>
+                    </form>
+                    <div style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: #94a3b8; cursor: pointer;" onclick="window.alternarModoAuth()">
+                        ¿No tienes cuenta? <span id="auth-switch-action" style="color: var(--accent-gold); font-weight: bold;">Regístrate aquí</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div class="bottom-nav-mobile">
+        <button id="nav-mobile-misiones" onclick="window.cambiarVista('misiones')">
+            <i class="fa-solid fa-bullseye"></i>
+            <span>Misiones</span>
+        </button>
+        <button id="nav-mobile-tienda" onclick="window.cambiarVista('tienda')">
+            <i class="fa-solid fa-percent"></i>
+            <span>Descuentos</span>
+        </button>
+        <button id="nav-mobile-dashboard-usuario" onclick="window.cambiarVista('dashboard-usuario')">
+            <i class="fa-solid fa-user"></i>
+            <span>Mi Perfil</span>
+        </button>
+        <button id="nav-mobile-vip" onclick="window.cambiarVista('vip')">
+            <i class="fa-solid fa-store"></i>
+            <span>Negocios</span>
+        </button>
+        <button id="nav-mobile-minijuegos" onclick="window.cambiarVista('minijuegos')">
+            <i class="fa-solid fa-gamepad"></i>
+            <span>Juegos</span>
+        </button>
+    </div>
+
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => { window.adaptarTemaDesdeLogo(); }, 500);
+        });
+    </script>
+</body>
+</html>
